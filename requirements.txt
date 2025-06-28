@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+streamlit
+google-api-python-client
+google-auth
+python-dateutil
+dateparser
+langchain
+langgraph
+openai
+python-dotenv
