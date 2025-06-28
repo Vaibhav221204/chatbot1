@@ -1,5 +1,7 @@
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from datetime import datetime, timedelta
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_ID = 'primary'
@@ -11,13 +13,18 @@ def get_calendar_service():
 
 def get_available_slots():
     service = get_calendar_service()
+    now = datetime.utcnow().isoformat() + 'Z'
+    future = (datetime.utcnow() + timedelta(days=1)).isoformat() + 'Z'
+
     events_result = service.events().list(
         calendarId=CALENDAR_ID,
-        timeMin='2024-01-01T00:00:00Z',
+        timeMin=now,
+        timeMax=future,
         maxResults=10,
         singleEvents=True,
         orderBy='startTime'
     ).execute()
+
     return events_result.get('items', [])
 
 def create_event(start_time, end_time, summary='Meeting'):
