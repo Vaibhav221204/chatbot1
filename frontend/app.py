@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="📅 Booking Assistant")
 st.title("📅 AI Appointment Scheduler")
 
-# Update this to your deployed backend URL
 API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
 if "messages" not in st.session_state:
@@ -18,10 +17,13 @@ if user_input:
 
     try:
         response = requests.post(f"{API_BASE}/chat", json={"message": user_input})
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx, 5xx)
         result = response.json()
 
-        reply = result.get("reply", "⚠️ No reply from assistant.")
+        # Safely handle reply whether it's a dict or string
+        reply = result["reply"]
+        if isinstance(reply, dict):
+            reply = str(reply)
+
         st.session_state.messages.append({"role": "bot", "text": reply})
         st.write("🤖 " + reply)
 
@@ -34,8 +36,6 @@ if user_input:
                 if booking.status_code == 200:
                     st.success("📅 Meeting booked successfully!")
                 else:
-                    st.error("❌ Booking failed. Please try again.")
-    except requests.exceptions.RequestException as e:
-        st.error(f"⚠️ Backend connection failed: {e}")
+                    st.error("❌ Booking failed.")
     except Exception as e:
-        st.error(f"❌ Unexpected error: {e}")
+        st.error(f"⚠️ Could not reach backend: {e}")
