@@ -1,9 +1,9 @@
-
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
+
 API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
 st.markdown("""
@@ -15,6 +15,20 @@ st.markdown("""
     max-width: 700px;
     margin: auto;
     box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.chat-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: 400px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 16px;
+    padding: 1rem;
+    background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
 }
 .user-msg, .bot-msg {
     padding: 0.75rem 1rem;
@@ -33,22 +47,11 @@ st.markdown("""
     align-self: flex-start;
     margin-right: auto;
 }
-.chat-box {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    height: 400px;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    border-radius: 16px;
-    padding: 1rem;
-    background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
-}
-.input-box {
-    margin-top: 1rem;
-    max-width: 700px;
-    margin-left: auto;
-    margin-right: auto;
+.input-area input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 1px solid #ccc;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -60,41 +63,41 @@ if "messages" not in st.session_state:
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
 
-# Input first and handle chat state updates BEFORE rendering messages
-st.markdown("<div class='input-box'>", unsafe_allow_html=True)
-user_input = st.text_input("Type your message", label_visibility="collapsed", placeholder="e.g. Book a meeting on Friday at 2pm")
-st.markdown("</div>", unsafe_allow_html=True)
-
-if user_input:
-    st.session_state.messages.append({"role": "user", "text": user_input})
-    try:
-        response = requests.post(f"{API_BASE}/chat", json={
-            "message": user_input,
-            "history": [m["text"] for m in st.session_state.messages if m["role"] in ["user", "bot"]]
-        })
-        result = response.json()
-        reply = result.get("reply", "⚠️ No reply received.")
-        st.session_state.messages.append({"role": "bot", "text": reply})
-        parsed_dt = result.get("datetime")
-        if parsed_dt:
-            st.session_state.proposed_time = parsed_dt
-    except Exception as e:
-        st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
-
-# Now render all messages INSIDE white box
 with st.container():
     st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
-    st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 
+    # CHAT BOX
+    st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
     for msg in st.session_state.messages:
         role = msg["role"]
         text = msg["text"]
         class_name = "user-msg" if role == "user" else "bot-msg"
         st.markdown(f"<div class='{class_name}'>{text}</div>", unsafe_allow_html=True)
-
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Booking proposal
+    # TEXT INPUT INSIDE CHAT CONTAINER
+    user_input = st.text_input("Type your message", label_visibility="collapsed",
+                               placeholder="e.g. Book a meeting on Friday at 2pm", key="input_box")
+
+    if user_input:
+        st.session_state.messages.append({"role": "user", "text": user_input})
+        st.session_state["input_box"] = ""  # Clear input after submission
+
+        try:
+            response = requests.post(f"{API_BASE}/chat", json={
+                "message": user_input,
+                "history": [m["text"] for m in st.session_state.messages if m["role"] in ["user", "bot"]]
+            })
+            result = response.json()
+            reply = result.get("reply", "⚠️ No reply received.")
+            st.session_state.messages.append({"role": "bot", "text": reply})
+            parsed_dt = result.get("datetime")
+            if parsed_dt:
+                st.session_state.proposed_time = parsed_dt
+        except Exception as e:
+            st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
+
+    # PROPOSED TIME + BUTTON
     if st.session_state.proposed_time:
         start = st.session_state.proposed_time
         end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
@@ -107,4 +110,4 @@ with st.container():
             else:
                 st.error("❌ Booking failed.")
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)  # close chat-container
