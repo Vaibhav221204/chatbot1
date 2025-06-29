@@ -16,12 +16,18 @@ class AgentState(TypedDict):
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
+    system_instruction = (
+        "You are an appointment scheduling assistant. "
+        "Your only job is to help users schedule meetings. "
+        "Ask for a preferred date and time, confirm it, and offer to book it. "
+        "Do not answer questions outside scheduling. Be concise and helpful."
+    )
+
     prompt = (
-    "You are a helpful assistant whose only task is to schedule meetings.\n"
-    "Always ask for the user's preferred time and date if not provided.\n"
-    "Then confirm availability and offer to book it.\n"
-    f"### Human: {message}\n### Assistant:"
-)
+        f"<|system|>\n{system_instruction}\n"
+        f"<|user|>\n{message}\n"
+        f"<|assistant|>"
+    )
 
     try:
         print("📨 Sending to Together API...")
@@ -45,7 +51,6 @@ def respond(state: AgentState) -> AgentState:
         data = response.json()
         print("📦 Raw response JSON:", data)
 
-        # ✅ Extract text from structured JSON
         if "output" in data and isinstance(data["output"], dict):
             choices = data["output"].get("choices", [])
             if choices and "text" in choices[0]:
