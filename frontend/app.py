@@ -3,73 +3,53 @@ import requests
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
-
 API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
-# Light theme styling
+# Inject custom CSS
 st.markdown("""
 <style>
-body {
-    background-color: #f5f5f5;
-}
-html, body, [class*="css"] {
-    font-family: 'Segoe UI', sans-serif;
-}
-
-.chat-container {
-    background-color: #ffffff;
-    border-radius: 16px;
-    padding: 1rem;
-    max-width: 700px;
-    margin: auto;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-}
-
 .chat-bubble {
-    padding: 0.8rem 1rem;
-    border-radius: 16px;
-    margin-bottom: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    margin: 0.5rem 0;
     max-width: 80%;
     word-wrap: break-word;
-    color: #000000;
-    font-size: 1rem;
+    color: black;  /* 🟢 Ensures readable text */
+    font-weight: 500;
 }
-
-.user-msg {
-    background-color: #e3f2fd;
+.user {
+    background-color: #E0F7FA;
     align-self: flex-end;
     margin-left: auto;
 }
-
-.bot-msg {
-    background-color: #f3e5f5;
+.bot {
+    background-color: #F3E5F5;
     align-self: flex-start;
     margin-right: auto;
 }
-
 .chat-box {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     padding: 1rem;
+    background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
     border-radius: 12px;
-    background-color: #ffffff;
-    min-height: 300px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
 
 st.title("💬 AI Appointment Scheduler")
 
+# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
 
-# User input
-user_input = st.text_input("You:", key="input", placeholder="e.g. Book a meeting on Friday at 2pm")
+# Handle user input
+user_input = st.text_input("You:", placeholder="e.g. Book a meeting on Friday at 2pm")
 
 if user_input:
     st.session_state.messages.append({"role": "user", "text": user_input})
@@ -81,22 +61,22 @@ if user_input:
         result = response.json()
         reply = result.get("reply", "⚠️ No reply received.")
         st.session_state.messages.append({"role": "bot", "text": reply})
-        parsed_dt = result.get("datetime")
-        if parsed_dt:
-            st.session_state.proposed_time = parsed_dt
-        # Clear input
-        st.experimental_rerun()
+
+        # Optional proposed time
+        if result.get("datetime"):
+            st.session_state.proposed_time = result["datetime"]
+
     except Exception as e:
         st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
 
-# Chat history
+# Show chat messages
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
-    class_name = "user-msg" if msg["role"] == "user" else "bot-msg"
-    st.markdown(f"<div class='chat-bubble {class_name}'>{msg['text']}</div>", unsafe_allow_html=True)
+    css_class = "user" if msg["role"] == "user" else "bot"
+    st.markdown(f"<div class='chat-bubble {css_class}'>{msg['text']}</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Proposed time and booking
+# Show booking option
 if st.session_state.proposed_time:
     start = st.session_state.proposed_time
     end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
@@ -108,5 +88,3 @@ if st.session_state.proposed_time:
             st.session_state.proposed_time = None
         else:
             st.error("❌ Booking failed.")
-
-st.markdown("</div>", unsafe_allow_html=True)
