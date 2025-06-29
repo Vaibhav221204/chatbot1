@@ -16,22 +16,17 @@ if user_input:
     st.session_state.messages.append({"role": "user", "text": user_input})
 
     try:
-        # The backend expects a key called "query"
-        response = requests.post(f"{API_BASE}/chat", json={"query": user_input})
+        # ✅ FIXED: Send key "message" as expected by backend
+        response = requests.post(f"{API_BASE}/chat", json={"message": user_input})
         result = response.json()
 
-        # Safely extract chatbot's reply
-        reply = result.get("reply")
-        bot_message = (
-            reply["choices"][0]["text"]
-            if isinstance(reply, dict) and "choices" in reply
-            else str(reply)
-        )
+        # Directly use the reply string
+        bot_message = result.get("message", "⚠️ No reply received.")
 
         st.session_state.messages.append({"role": "bot", "text": bot_message})
         st.write("🤖 " + bot_message)
 
-        # If datetime is present, offer to book
+        # Offer to book meeting if datetime is present
         if result.get("datetime"):
             start = result["datetime"]
             end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
