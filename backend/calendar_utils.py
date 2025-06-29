@@ -8,12 +8,12 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_ID = 'vaibhav22gandhi@gmail.com'
 
 def get_calendar_service():
-    # Decode credentials from Railway variable
+    
     raw = os.getenv("GOOGLE_CREDENTIALS_BASE64")
     if not raw:
         raise ValueError("Missing GOOGLE_CREDENTIALS_BASE64 variable!")
 
-    # Decode and write to /tmp (safe for Railway)
+    
     decoded = base64.b64decode(raw)
     with open("/tmp/credentials.json", "wb") as f:
         f.write(decoded)
