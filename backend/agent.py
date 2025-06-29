@@ -5,16 +5,16 @@ from typing import TypedDict
 from dotenv import load_dotenv
 import dateparser
 from datetime import datetime, timedelta
-from backend.calendar_utils import create_event, get_available_slots  # ✅ calendar functions
+from backend.calendar_utils import create_event, get_available_slots 
 
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
 
-# Define the agent's state type
+
 class AgentState(TypedDict):
     message: str
 
-# Response logic for LangGraph node
+
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
@@ -72,7 +72,7 @@ def run_agent(message: str) -> dict:
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
-    # Check availability
+    
     if parsed_date:
         requested_start = parsed_date.isoformat()
         requested_end = (parsed_date + timedelta(hours=1)).isoformat()
@@ -89,7 +89,7 @@ def run_agent(message: str) -> dict:
                         "datetime": None
                     }
 
-            # No conflict found
+            
             return {
                 "reply": f"You're available at that time. Should I go ahead and book it?",
                 "datetime": datetime_str
