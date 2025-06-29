@@ -9,9 +9,11 @@ import re
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
 
+# Define the agent's state type
 class AgentState(TypedDict):
     message: str
 
+# The function that handles the AI response
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
@@ -43,30 +45,25 @@ def respond(state: AgentState) -> AgentState:
         data = response.json()
         output = data.get("output", "")
 
-        # Clean up output
+        # Clean the assistant's reply from the raw output
         cleaned = re.split(r"###\s*Assistant:", output)[-1].strip()
+        return {"message": cleaned}
 
     except Exception as e:
         print("❌ Exception caught:", e)
-        cleaned = f"❌ Error: {str(e)}"
+        return {"message": f"❌ Error: {str(e)}"}
 
-    return {"message": cleaned}
-
-# LangGraph setup
+# Build the LangGraph workflow
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
 workflow.set_entry_point("chat")
 workflow.set_finish_point("chat")
 agent = workflow.compile()
 
+# External callable function for FastAPI
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
-    response_text = result["message"]
-
+    response_text = result["message"]  # This is a string
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
-
-    return {
-        "reply": response_text,
-        "datetime": datetime_str
-    }
+    return {"reply": response_text, "datetime": datetime_str}
