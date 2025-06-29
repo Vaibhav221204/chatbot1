@@ -3,10 +3,9 @@ import requests
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
-
 API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
-# Inject custom CSS for clean chat UI
+# Custom CSS
 st.markdown("""
 <style>
 .chat-bubble {
@@ -43,16 +42,17 @@ st.markdown("""
 
 st.title("💬 AI Appointment Scheduler")
 
-# Session state setup
+# Init session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
+if "input_key" not in st.session_state:
+    st.session_state.input_key = "input_1"
 
-# Text input
-user_input = st.text_input("You:", key="input_text", placeholder="e.g. Book a meeting on Friday at 2pm")
+# Chat input (with dynamic key to force reset)
+user_input = st.text_input("You:", key=st.session_state.input_key, placeholder="e.g. Book a meeting on Friday at 2pm")
 
-# Handle user input and chatbot reply
 if user_input:
     st.session_state.messages.append({"role": "user", "text": user_input})
     try:
@@ -63,34 +63,30 @@ if user_input:
         result = response.json()
         reply = result.get("reply", "⚠️ No reply received.")
 
-        # Only show bot message if not a booking confirmation
         if "I have scheduled" not in reply and "meeting booked" not in reply.lower():
             st.session_state.messages.append({"role": "bot", "text": reply})
 
-        # Store datetime for booking button
         if result.get("datetime"):
             st.session_state.proposed_time = result["datetime"]
 
     except Exception as e:
         st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
 
-    # Clear the input box after submission
-    del st.session_state["input_text"]
+    # Trick to clear input: change key so Streamlit resets the box
+    st.session_state.input_key = f"input_{len(st.session_state.messages)}"
     st.rerun()
 
 # Display messages
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
-    role = msg["role"]
-    css_class = "user" if role == "user" else "bot"
+    css_class = "user" if msg["role"] == "user" else "bot"
     st.markdown(f"<div class='chat-bubble {css_class}'>{msg['text']}</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Show booking confirmation button
+# Booking UI
 if st.session_state.proposed_time:
     start = st.session_state.proposed_time
     end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
-
     st.markdown("🕒 **Proposed time:** " + datetime.fromisoformat(start).strftime("%A, %B %d at %I:%M %p"))
 
     if st.button("✅ Yes, book this meeting"):
