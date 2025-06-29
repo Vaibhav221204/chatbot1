@@ -19,13 +19,13 @@ if user_input:
         response = requests.post(f"{API_BASE}/chat", json={"message": user_input})
         result = response.json()
 
-        # ✅ FIX: Directly get string from reply
-        bot_message = result.get("reply", "⚠️ No response")
+        # ✅ FIX: Directly read the reply as a string
+        bot_message = result.get("reply", "⚠️ No reply")
 
         st.session_state.messages.append({"role": "bot", "text": bot_message})
         st.write("🤖 " + bot_message)
 
-        # ✅ Optional booking logic
+        # Optional booking if datetime included
         if result.get("datetime"):
             start = result["datetime"]
             end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
@@ -36,6 +36,5 @@ if user_input:
                     st.success("📅 Meeting booked successfully!")
                 else:
                     st.error("❌ Booking failed.")
-
     except Exception as e:
         st.error(f"⚠️ Backend connection failed: {e}")
