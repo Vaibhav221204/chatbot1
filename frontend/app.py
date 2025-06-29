@@ -1,3 +1,4 @@
+app.py
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
@@ -11,10 +12,10 @@ st.markdown("""
 .chat-bubble {
     padding: 0.75rem 1rem;
     border-radius: 12px;
-    margin: 0.5rem 0;
+    margin: 0.5rem 0;a
     max-width: 80%;
     word-wrap: break-word;
-    color: black;
+    color: black;  /* 🟢 Ensures readable text */
     font-weight: 500;
 }
 .user {
@@ -39,6 +40,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 st.title("💬 AI Appointment Scheduler")
 
 # Session state
@@ -46,14 +48,12 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
-if "input" not in st.session_state:
-    st.session_state.input = ""
 
-# Function to handle input and clear it safely
-def handle_submit():
-    user_input = st.session_state.input
+# Handle user input
+user_input = st.text_input("You:", placeholder="e.g. Book a meeting on Friday at 2pm")
+
+if user_input:
     st.session_state.messages.append({"role": "user", "text": user_input})
-
     try:
         response = requests.post(f"{API_BASE}/chat", json={
             "message": user_input,
@@ -63,17 +63,12 @@ def handle_submit():
         reply = result.get("reply", "⚠️ No reply received.")
         st.session_state.messages.append({"role": "bot", "text": reply})
 
+        # Optional proposed time
         if result.get("datetime"):
             st.session_state.proposed_time = result["datetime"]
 
     except Exception as e:
         st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
-
-    # Safely clear input
-    st.session_state.input = ""
-
-# Input widget with callback
-st.text_input("You:", key="input", placeholder="e.g. Book a meeting on Friday at 2pm", on_change=handle_submit, label_visibility="collapsed")
 
 # Show chat messages
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
