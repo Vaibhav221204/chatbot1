@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="📅 Booking Assistant")
 st.title("📅 AI Appointment Scheduler")
 
-API_BASE = "http://localhost:9000"  # ✅ Updated to match your running port
+API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
