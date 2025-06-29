@@ -19,13 +19,15 @@ if user_input:
         response = requests.post(f"{API_BASE}/chat", json={"message": user_input})
         result = response.json()
 
-        # ✅ Fix: Directly extract the reply string
-        bot_message = result.get("reply", "⚠️ No reply")
+        # Ensure response is a plain string
+        bot_reply = result.get("reply", "")
+        if isinstance(bot_reply, dict):
+            bot_reply = str(bot_reply)
 
-        st.session_state.messages.append({"role": "bot", "text": bot_message})
-        st.write("🤖 " + bot_message)
+        st.session_state.messages.append({"role": "bot", "text": bot_reply})
+        st.write("🤖 " + bot_reply)
 
-        # Optional booking if datetime included
+        # Optional booking if datetime was extracted
         if result.get("datetime"):
             start = result["datetime"]
             end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
@@ -37,4 +39,4 @@ if user_input:
                 else:
                     st.error("❌ Booking failed.")
     except Exception as e:
-        st.error(f"⚠️ Backend connection failed: {e}")
+        st.error(f"⚠️ Error: {e}")
