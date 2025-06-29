@@ -49,13 +49,11 @@ if "proposed_time" not in st.session_state:
 if "input" not in st.session_state:
     st.session_state.input = ""
 
-# Input box with session key
-st.text_input("You:", key="input", placeholder="e.g. Book a meeting on Friday at 2pm", label_visibility="collapsed")
-
-# Handle user input
-if st.session_state.input:
+# Function to handle input and clear it safely
+def handle_submit():
     user_input = st.session_state.input
     st.session_state.messages.append({"role": "user", "text": user_input})
+
     try:
         response = requests.post(f"{API_BASE}/chat", json={
             "message": user_input,
@@ -71,8 +69,11 @@ if st.session_state.input:
     except Exception as e:
         st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
 
-    # Auto-clear the input box
+    # Safely clear input
     st.session_state.input = ""
+
+# Input widget with callback
+st.text_input("You:", key="input", placeholder="e.g. Book a meeting on Friday at 2pm", on_change=handle_submit, label_visibility="collapsed")
 
 # Show chat messages
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
