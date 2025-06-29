@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -27,8 +26,7 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 async def chat(request: ChatRequest):
     result = run_agent(request.message)
-return {"message": result["reply"], "datetime": result["datetime"]}
-
+    return {"message": result["reply"], "datetime": result["datetime"]}
 
 @app.get("/slots")
 def slots():
