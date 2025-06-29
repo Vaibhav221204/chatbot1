@@ -24,7 +24,7 @@ def respond(state: AgentState) -> AgentState:
     "Ask for date and time if not provided. Before confirming a meeting, check the calendar for conflicts. "
     "If the time is already booked, ask the user to choose another slot. Otherwise, confirm and ask if they want to proceed with booking.\n"
     "If the user asks for available time slots, use calendar data and respond accordingly.\n\n"
-    f"User: {message}\nAssistan:"
+    f"User: {message}\nAssistant:"
 )
 
 
