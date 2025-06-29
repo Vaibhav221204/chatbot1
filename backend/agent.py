@@ -1,10 +1,10 @@
-
 import os
 import requests
 from langgraph.graph import StateGraph
 from typing import TypedDict
 from dotenv import load_dotenv
 import dateparser
+import re
 
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
@@ -36,29 +36,35 @@ def respond(state: AgentState):
         )
 
         print("📬 Status Code:", response.status_code)
-        print("📬 Response:", response.text)
 
         if response.status_code != 200:
             return {"message": f"⚠️ Together API error: {response.status_code} - {response.text}"}
 
         data = response.json()
-        output = data.get("output") or "⚠️ No output received."
+        output = data.get("output", "")
+
+        # Clean output: Remove anything before "Assistant:" if present
+        cleaned = re.split(r"###\s*Assistant:", output)[-1].strip()
 
     except Exception as e:
         print("❌ Exception caught:", e)
-        output = f"❌ Error: {str(e)}"
+        cleaned = f"❌ Error: {str(e)}"
 
-    return {"message": output}
+    return {"message": cleaned}
 
+# LangGraph setup
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
 workflow.set_entry_point("chat")
 workflow.set_finish_point("chat")
 agent = workflow.compile()
 
+# Function to call from FastAPI
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
     response_text = result["message"]
+
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
+
     return {"reply": response_text, "datetime": datetime_str}
