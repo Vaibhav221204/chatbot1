@@ -46,16 +46,12 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
-if "input_text" not in st.session_state:
-    st.session_state.input_text = ""
 
-# Input box with a key to clear it
-user_input = st.text_input("You:", value=st.session_state.input_text, key="input_text", placeholder="e.g. Book a meeting on Friday at 2pm")
+# Input box
+user_input = st.text_input("You:", key="input_text", placeholder="e.g. Book a meeting on Friday at 2pm")
 
-# Handle user input
-if user_input and st.session_state.input_text != "":
+if user_input:
     st.session_state.messages.append({"role": "user", "text": user_input})
-    st.session_state.input_text = ""  # Clear input field after submission
 
     try:
         response = requests.post(f"{API_BASE}/chat", json={
@@ -65,9 +61,10 @@ if user_input and st.session_state.input_text != "":
         result = response.json()
         reply = result.get("reply", "⚠️ No reply received.")
 
-        # ✅ Modify misleading message temporarily
-        if "scheduled a meeting" in reply.lower():
+        # Avoid premature confirmation message
+        if "scheduled a meeting" in reply.lower() or "booked a meeting" in reply.lower():
             reply = reply.replace("scheduled a meeting", "noted your preferred time")
+            reply = reply.replace("booked a meeting", "noted your preferred time")
 
         st.session_state.messages.append({"role": "bot", "text": reply})
 
@@ -77,8 +74,11 @@ if user_input and st.session_state.input_text != "":
     except Exception as e:
         st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
 
+    # Clear input field safely
+    del st.session_state["input_text"]
+    st.experimental_rerun()
 
-# Show chat messages
+# Chat history
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
     css_class = "user" if msg["role"] == "user" else "bot"
