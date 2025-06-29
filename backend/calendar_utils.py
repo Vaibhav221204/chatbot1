@@ -5,7 +5,7 @@ from googleapiclient.discovery import build
 from datetime import datetime, timedelta
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-CALENDAR_ID = 'primary'
+CALENDAR_ID = 'vaibhav22gandhi@gmail.com'
 
 def get_calendar_service():
     # Decode credentials from Railway variable
