@@ -17,11 +17,12 @@ def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
-        "You are an appointment booking assistant. Stay focused only on scheduling meetings. "
-        "Do not roleplay both user and assistant. Only respond as the assistant.\n"
-        "Ask for date and time if not provided. Confirm and offer to book the meeting.\n\n"
-        f"User: {message}\nAssistant:"
-    )
+    "You are an appointment booking assistant. Your job is to help users book meetings, "
+    "but never assume or confirm that the booking is done. Instead, always ask the user "
+    "to confirm the time or approve the slot before you proceed to book.\n"
+    "Respond clearly, but do not say that the meeting is scheduled unless explicitly confirmed by the user.\n\n"
+    f"User: {message}\nAssistant:"
+)
 
     try:
         print("📨 Sending to Together API...")
