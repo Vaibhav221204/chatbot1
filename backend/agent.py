@@ -4,8 +4,8 @@ from langgraph.graph import StateGraph
 from typing import TypedDict
 from dotenv import load_dotenv
 import dateparser
-from datetime import timedelta
-from backend.calendar_utils import create_event  # ✅ Connect calendar
+from datetime import datetime, timedelta
+from backend.calendar_utils import create_event, get_available_slots  # ✅ calendar functions
 
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
@@ -14,21 +14,20 @@ api_key = os.getenv("TOGETHER_API_KEY")
 class AgentState(TypedDict):
     message: str
 
-# The function that handles the AI response
+# Response logic for LangGraph node
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
     "You are an appointment booking assistant. Stay focused only on scheduling meetings. "
     "Do not roleplay both user and assistant. Only respond as the assistant.\n"
-    "Ask for date and time if not provided. Confirm and offer to book the meeting.\n\n"
+    "Ask for date and time if not provided. Before confirming a meeting, check the calendar for conflicts. "
+    "If the time is already booked, suggest the user to pick another slot. Otherwise, confirm and offer to book the meeting.\n"
+    "If the user asks for available time slots, check the calendar and respond with free times.\n\n"
     f"User: {message}\nAssistant:"
 )
 
     try:
-        print("📨 Sending to Together API...")
-        print("📨 Prompt:", prompt)
-
         response = requests.post(
             "https://api.together.xyz/inference",
             headers={
@@ -43,11 +42,7 @@ def respond(state: AgentState) -> AgentState:
             }
         )
 
-        print("📬 Status Code:", response.status_code)
         data = response.json()
-        print("📦 Raw response JSON:", data)
-
-        # ✅ Extract text from structured JSON
         if "output" in data and isinstance(data["output"], dict):
             choices = data["output"].get("choices", [])
             if choices and "text" in choices[0]:
@@ -60,36 +55,50 @@ def respond(state: AgentState) -> AgentState:
         return {"message": reply_text}
 
     except Exception as e:
-        print("❌ Exception caught:", e)
         return {"message": f"❌ Error: {str(e)}"}
 
-# Build the LangGraph workflow
+# LangGraph setup
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
 workflow.set_entry_point("chat")
 workflow.set_finish_point("chat")
 agent = workflow.compile()
 
-# External callable function for FastAPI
+# Final callable function
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
     response_text = result.get("message", "")
-
-    if not isinstance(response_text, str):
-        response_text = str(response_text)
-
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
-    # ✅ Book meeting if datetime exists
+    # Check availability
     if parsed_date:
-        start = parsed_date.isoformat()
-        end = (parsed_date + timedelta(hours=1)).isoformat()
+        requested_start = parsed_date.isoformat()
+        requested_end = (parsed_date + timedelta(hours=1)).isoformat()
+
         try:
-            create_event(start, end)
-            print("✅ Meeting booked from agent.py")
+            events = get_available_slots()
+            for event in events:
+                event_start = event['start'].get('dateTime', event['start'].get('date'))
+                event_end = event['end'].get('dateTime', event['end'].get('date'))
+
+                if event_start <= requested_start < event_end:
+                    return {
+                        "reply": f"You're not available at that time. Would you like to choose another slot?",
+                        "datetime": None
+                    }
+
+            # No conflict found
+            return {
+                "reply": f"You're available at that time. Should I go ahead and book it?",
+                "datetime": datetime_str
+            }
+
         except Exception as e:
-            print("❌ Failed to create event:", str(e))
+            return {
+                "reply": f"⚠️ Failed to check calendar availability: {str(e)}",
+                "datetime": None
+            }
 
     return {
         "reply": response_text,
