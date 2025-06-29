@@ -85,13 +85,13 @@ def run_agent(message: str) -> dict:
 
                 if event_start <= requested_start < event_end:
                     return {
-                        "reply": f"You're not available at that time. Would you like to choose another slot?",
+                        "reply": f"That time is not available. Would you like me to book it?",
                         "datetime": None
                     }
 
             
             return {
-                "reply": f"You're available at that time. Should I go ahead and book it?",
+                "reply": f"That time seems available. Would you like me to book it?",
                 "datetime": datetime_str
             }
 
