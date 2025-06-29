@@ -16,7 +16,12 @@ class AgentState(TypedDict):
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
-    prompt = f"### Human: {message}\n### Assistant:"
+    prompt = (
+    "You are a helpful assistant whose only task is to schedule meetings.\n"
+    "Always ask for the user's preferred time and date if not provided.\n"
+    "Then confirm availability and offer to book it.\n"
+    f"### Human: {message}\n### Assistant:"
+)
 
     try:
         print("📨 Sending to Together API...")
