@@ -14,6 +14,8 @@ st.markdown("""
     margin: 0.5rem 0;
     max-width: 80%;
     word-wrap: break-word;
+    color: black;  /* 🟢 Ensures readable text */
+    font-weight: 500;
 }
 .user {
     background-color: #E0F7FA;
@@ -36,6 +38,7 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 st.title("💬 AI Appointment Scheduler")
 
