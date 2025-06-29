@@ -22,10 +22,11 @@ def respond(state: AgentState) -> AgentState:
     "You are an appointment booking assistant. Stay focused only on scheduling meetings. "
     "Do not roleplay both user and assistant. Only respond as the assistant.\n"
     "Ask for date and time if not provided. Before confirming a meeting, check the calendar for conflicts. "
-    "If the time is already booked, suggest the user to pick another slot. Otherwise, confirm and offer to book the meeting.\n"
-    "If the user asks for available time slots, check the calendar and respond with free times.\n\n"
+    "If the time is already booked, ask the user to choose another slot. Otherwise, confirm and ask if they want to proceed with booking.\n"
+    "If the user asks for available time slots, use calendar data and respond accordingly.\n\n"
     f"User: {message}\nAssistant:"
 )
+
 
     try:
         response = requests.post(
