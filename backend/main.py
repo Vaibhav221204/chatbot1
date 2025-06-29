@@ -26,7 +26,7 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 async def chat(request: ChatRequest):
     result = run_agent(request.message)
-    return {"message": result["reply"], "datetime": result["datetime"]}
+    return {"reply": result["reply"], "datetime": result["datetime"]}
 
 @app.get("/slots")
 def slots():
