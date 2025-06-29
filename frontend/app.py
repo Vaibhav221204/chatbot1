@@ -11,10 +11,10 @@ st.markdown("""
 .chat-bubble {
     padding: 0.75rem 1rem;
     border-radius: 12px;
-    margin: 0.5rem 0;a
+    margin: 0.5rem 0;
     max-width: 80%;
     word-wrap: break-word;
-    color: black;  /* 🟢 Ensures readable text */
+    color: black;
     font-weight: 500;
 }
 .user {
@@ -39,7 +39,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
 st.title("💬 AI Appointment Scheduler")
 
 # Session state
@@ -47,12 +46,17 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
+if "input_text" not in st.session_state:
+    st.session_state.input_text = ""
+
+# Input box with a key to clear it
+user_input = st.text_input("You:", value=st.session_state.input_text, key="input_text", placeholder="e.g. Book a meeting on Friday at 2pm")
 
 # Handle user input
-user_input = st.text_input("You:", placeholder="e.g. Book a meeting on Friday at 2pm")
-
-if user_input:
+if user_input and st.session_state.input_text != "":
     st.session_state.messages.append({"role": "user", "text": user_input})
+    st.session_state.input_text = ""  # Clear input field after submission
+
     try:
         response = requests.post(f"{API_BASE}/chat", json={
             "message": user_input,
@@ -60,14 +64,19 @@ if user_input:
         })
         result = response.json()
         reply = result.get("reply", "⚠️ No reply received.")
+
+        # ✅ Modify misleading message temporarily
+        if "scheduled a meeting" in reply.lower():
+            reply = reply.replace("scheduled a meeting", "noted your preferred time")
+
         st.session_state.messages.append({"role": "bot", "text": reply})
 
-        # Optional proposed time
         if result.get("datetime"):
             st.session_state.proposed_time = result["datetime"]
 
     except Exception as e:
         st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
+
 
 # Show chat messages
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
