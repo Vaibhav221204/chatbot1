@@ -1,3 +1,4 @@
+
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
@@ -77,7 +78,9 @@ with st.container():
                 "history": [m["text"] for m in st.session_state.messages if m["role"] in ["user", "bot"]]
             })
             result = response.json()
-            reply = result.get("message", "⚠️ No reply received.")
+
+            # ✅ FIXED: read 'reply' instead of 'message'
+            reply = result.get("reply", "⚠️ No reply received.")
             st.session_state.messages.append({"role": "bot", "text": reply})
 
             parsed_dt = result.get("datetime")
