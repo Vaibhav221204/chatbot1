@@ -4,7 +4,6 @@ import requests
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
-
 API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
 st.markdown("""
@@ -55,6 +54,24 @@ if "messages" not in st.session_state:
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
 
+user_input = st.text_input("Type your message", label_visibility="collapsed", placeholder="e.g. Book a meeting on Friday at 2pm")
+
+if user_input:
+    st.session_state.messages.append({"role": "user", "text": user_input})
+    try:
+        response = requests.post(f"{API_BASE}/chat", json={
+            "message": user_input,
+            "history": [m["text"] for m in st.session_state.messages if m["role"] in ["user", "bot"]]
+        })
+        result = response.json()
+        reply = result.get("reply", "⚠️ No reply received.")
+        st.session_state.messages.append({"role": "bot", "text": reply})
+        parsed_dt = result.get("datetime")
+        if parsed_dt:
+            st.session_state.proposed_time = parsed_dt
+    except Exception as e:
+        st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
+
 with st.container():
     st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
     st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
@@ -66,29 +83,6 @@ with st.container():
         st.markdown(f"<div class='{class_name}'>{text}</div>", unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-
-    user_input = st.text_input("Type your message", label_visibility="collapsed", placeholder="e.g. Book a meeting on Friday at 2pm")
-
-    if user_input:
-        st.session_state.messages.append({"role": "user", "text": user_input})
-
-        try:
-            response = requests.post(f"{API_BASE}/chat", json={
-                "message": user_input,
-                "history": [m["text"] for m in st.session_state.messages if m["role"] in ["user", "bot"]]
-            })
-            result = response.json()
-
-            # ✅ FIXED: read 'reply' instead of 'message'
-            reply = result.get("reply", "⚠️ No reply received.")
-            st.session_state.messages.append({"role": "bot", "text": reply})
-
-            parsed_dt = result.get("datetime")
-            if parsed_dt:
-                st.session_state.proposed_time = parsed_dt
-
-        except Exception as e:
-            st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
 
     if st.session_state.proposed_time:
         start = st.session_state.proposed_time
