@@ -4,6 +4,8 @@ from langgraph.graph import StateGraph
 from typing import TypedDict
 from dotenv import load_dotenv
 import dateparser
+from datetime import timedelta
+from backend.calendar_utils import create_event  # ✅ Connect calendar
 
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
@@ -17,10 +19,9 @@ def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
-    "You are an appointment booking assistant. Your job is to help users book meetings, "
-    "but never assume or confirm that the booking is done. Instead, always ask the user "
-    "to confirm the time or approve the slot before you proceed to book.\n"
-    "Respond clearly, but do not say that the meeting is scheduled unless explicitly confirmed by the user.\n\n"
+    "You are an appointment booking assistant. Stay focused only on scheduling meetings. "
+    "Do not roleplay both user and assistant. Only respond as the assistant.\n"
+    "Ask for date and time if not provided. Confirm and offer to book the meeting.\n\n"
     f"User: {message}\nAssistant:"
 )
 
@@ -77,9 +78,18 @@ def run_agent(message: str) -> dict:
     if not isinstance(response_text, str):
         response_text = str(response_text)
 
-    # ✅ Only return parsed datetime — don't book here
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
+
+    # ✅ Book meeting if datetime exists
+    if parsed_date:
+        start = parsed_date.isoformat()
+        end = (parsed_date + timedelta(hours=1)).isoformat()
+        try:
+            create_event(start, end)
+            print("✅ Meeting booked from agent.py")
+        except Exception as e:
+            print("❌ Failed to create event:", str(e))
 
     return {
         "reply": response_text,
