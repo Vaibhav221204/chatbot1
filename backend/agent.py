@@ -9,9 +9,11 @@ import re
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
 
+# Define the agent's state type
 class AgentState(TypedDict):
     message: str
 
+# The function that handles the AI response
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
@@ -38,47 +40,47 @@ def respond(state: AgentState) -> AgentState:
         print("📬 Status Code:", response.status_code)
 
         if response.status_code != 200:
-            return {"message": f"⚠️ API error {response.status_code}: {response.text}"}
+            return {"message": f"⚠️ Together API error: {response.status_code} - {response.text}"}
 
         data = response.json()
+        print("📦 Raw response JSON:", data)
 
-        # ✅ Robust reply extraction
-        raw_output = ""
+        # Safe extraction
+        output = ""
         if "choices" in data and isinstance(data["choices"], list):
-            raw_output = data["choices"][0].get("text", "")
+            output = data["choices"][0].get("text", "")
         elif "output" in data:
-            raw_output = data["output"]
+            output = data["output"]
 
-        # Ensure raw_output is a string
-        if not isinstance(raw_output, str):
-            raw_output = str(raw_output)
+        if not isinstance(output, str):
+            output = str(output)
 
-        # ✅ Strip anything before Assistant:
-        cleaned = re.split(r"###\s*Assistant:", raw_output)[-1].strip()
-
+        cleaned = re.split(r"###\s*Assistant:", output)[-1].strip()
         return {"message": cleaned}
 
     except Exception as e:
         print("❌ Exception caught:", e)
         return {"message": f"❌ Error: {str(e)}"}
 
-# LangGraph setup
+# Build the LangGraph workflow
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
 workflow.set_entry_point("chat")
 workflow.set_finish_point("chat")
 agent = workflow.compile()
 
+# External callable function for FastAPI
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
-    reply = result.get("message", "")
-    if not isinstance(reply, str):
-        reply = str(reply)
+    response_text = result.get("message", "")
+
+    if not isinstance(response_text, str):
+        response_text = str(response_text)
 
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
     return {
-        "reply": reply,
+        "reply": response_text,
         "datetime": datetime_str
     }
