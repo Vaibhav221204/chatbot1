@@ -12,7 +12,7 @@ api_key = os.getenv("TOGETHER_API_KEY")
 class AgentState(TypedDict):
     message: str
 
-def respond(state: AgentState):
+def respond(state: AgentState) -> AgentState:
     message = state["message"]
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = f"### Human: {message}\n### Assistant:"
@@ -43,7 +43,7 @@ def respond(state: AgentState):
         data = response.json()
         output = data.get("output", "")
 
-        # Clean output: Remove anything before "Assistant:" if present
+        # Clean up output
         cleaned = re.split(r"###\s*Assistant:", output)[-1].strip()
 
     except Exception as e:
@@ -59,7 +59,6 @@ workflow.set_entry_point("chat")
 workflow.set_finish_point("chat")
 agent = workflow.compile()
 
-# Function to call from FastAPI
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
     response_text = result["message"]
@@ -67,4 +66,7 @@ def run_agent(message: str) -> dict:
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
-    return {"reply": response_text, "datetime": datetime_str}
+    return {
+        "reply": response_text,
+        "datetime": datetime_str
+    }
