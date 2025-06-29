@@ -3,7 +3,6 @@ import requests
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
-
 API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
 st.markdown("""
@@ -47,42 +46,40 @@ st.markdown("""
     align-self: flex-start;
     margin-right: auto;
 }
-.input-area input {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-}
 </style>
 """, unsafe_allow_html=True)
 
 st.title("💬 AI Appointment Scheduler")
 
+# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
+if "input_key" not in st.session_state:
+    st.session_state.input_key = 0  # Used to reset the input
 
+# Main container
 with st.container():
     st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
 
-    # CHAT BOX
+    # CHAT BOX inside container
     st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
     for msg in st.session_state.messages:
-        role = msg["role"]
-        text = msg["text"]
-        class_name = "user-msg" if role == "user" else "bot-msg"
-        st.markdown(f"<div class='{class_name}'>{text}</div>", unsafe_allow_html=True)
+        class_name = "user-msg" if msg["role"] == "user" else "bot-msg"
+        st.markdown(f"<div class='{class_name}'>{msg['text']}</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # TEXT INPUT INSIDE CHAT CONTAINER
-    user_input = st.text_input("Type your message", label_visibility="collapsed",
-                               placeholder="e.g. Book a meeting on Friday at 2pm", key="input_box")
+    # INPUT FIELD — use unique key that changes to clear it
+    user_input = st.text_input(
+        "Type your message",
+        key=f"input_{st.session_state.input_key}",
+        label_visibility="collapsed",
+        placeholder="e.g. Book a meeting on Friday at 2pm"
+    )
 
     if user_input:
         st.session_state.messages.append({"role": "user", "text": user_input})
-        st.session_state["input_box"] = ""  # Clear input after submission
-
         try:
             response = requests.post(f"{API_BASE}/chat", json={
                 "message": user_input,
@@ -91,13 +88,18 @@ with st.container():
             result = response.json()
             reply = result.get("reply", "⚠️ No reply received.")
             st.session_state.messages.append({"role": "bot", "text": reply})
+
             parsed_dt = result.get("datetime")
             if parsed_dt:
                 st.session_state.proposed_time = parsed_dt
+
         except Exception as e:
             st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
 
-    # PROPOSED TIME + BUTTON
+        # Clear input by incrementing key
+        st.session_state.input_key += 1
+
+    # Booking section
     if st.session_state.proposed_time:
         start = st.session_state.proposed_time
         end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
@@ -110,4 +112,4 @@ with st.container():
             else:
                 st.error("❌ Booking failed.")
 
-    st.markdown("</div>", unsafe_allow_html=True)  # close chat-container
+    st.markdown("</div>", unsafe_allow_html=True)  # end chat-container
