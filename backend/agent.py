@@ -45,9 +45,9 @@ def respond(state: AgentState) -> AgentState:
         data = response.json()
         output = data.get("output", "")
 
-        # Clean the assistant's reply from any system formatting
+        # Clean and extract the actual assistant reply
         cleaned = re.split(r"###\s*Assistant:", output)[-1].strip()
-        return {"message": str(cleaned)}
+        return {"message": cleaned}
 
     except Exception as e:
         print("❌ Exception caught:", e)
@@ -65,15 +65,12 @@ def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
     response_text = result.get("message", "")
 
-    # Ensure this is always a string
     if not isinstance(response_text, str):
         response_text = str(response_text)
 
-    # Attempt to parse datetime if any
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
-    # Return a clean JSON-serializable dict
     return {
         "reply": response_text,
         "datetime": datetime_str
