@@ -63,10 +63,12 @@ agent = workflow.compile()
 # External callable function for FastAPI
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
-    response_text = str(result.get("message", ""))
+    response_text = result["message"]  # <-- this is a dict now!
 
-    # Parse datetime from message text
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
-    return {"reply": response_text, "datetime": datetime_str}
+    return {
+        "reply": response_text["message"],  # fix here!
+        "datetime": datetime_str
+    }
