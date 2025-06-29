@@ -38,18 +38,24 @@ def respond(state: AgentState) -> AgentState:
         print("📬 Status Code:", response.status_code)
 
         if response.status_code != 200:
-            return {"message": f"⚠️ Together API error: {response.status_code} - {response.text}"}
+            return {"message": f"⚠️ API error {response.status_code}: {response.text}"}
 
         data = response.json()
 
-        # Safely extract text from either choices[] or output
-        if "choices" in data and isinstance(data["choices"], list) and "text" in data["choices"][0]:
-            raw_output = data["choices"][0]["text"]
-        else:
-            raw_output = data.get("output", "")
+        # ✅ Robust reply extraction
+        raw_output = ""
+        if "choices" in data and isinstance(data["choices"], list):
+            raw_output = data["choices"][0].get("text", "")
+        elif "output" in data:
+            raw_output = data["output"]
 
-        # Clean reply after Assistant tag
+        # Ensure raw_output is a string
+        if not isinstance(raw_output, str):
+            raw_output = str(raw_output)
+
+        # ✅ Strip anything before Assistant:
         cleaned = re.split(r"###\s*Assistant:", raw_output)[-1].strip()
+
         return {"message": cleaned}
 
     except Exception as e:
@@ -65,15 +71,14 @@ agent = workflow.compile()
 
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
-    response_text = result.get("message", "")
-
-    if not isinstance(response_text, str):
-        response_text = str(response_text)
+    reply = result.get("message", "")
+    if not isinstance(reply, str):
+        reply = str(reply)
 
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
     return {
-        "reply": response_text,
+        "reply": reply,
         "datetime": datetime_str
     }
