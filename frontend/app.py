@@ -19,10 +19,8 @@ if user_input:
         response = requests.post(f"{API_BASE}/chat", json={"message": user_input})
         result = response.json()
 
-        # Just get reply string safely
-        bot_message = result.get("reply")
-        if not isinstance(bot_message, str):
-            bot_message = str(bot_message)
+        # Corrected extraction logic
+        bot_message = result.get("reply", "⚠️ No reply")
 
         st.session_state.messages.append({"role": "bot", "text": bot_message})
         st.write("🤖 " + bot_message)
@@ -38,6 +36,5 @@ if user_input:
                     st.success("📅 Meeting booked successfully!")
                 else:
                     st.error("❌ Booking failed.")
-
     except Exception as e:
-        st.error(f"⚠️ No reply (Error: {str(e)})")
+        st.error(f"⚠️ Backend connection failed: {e}")
