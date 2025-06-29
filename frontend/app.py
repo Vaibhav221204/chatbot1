@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
 API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
-# Custom CSS
+
 st.markdown("""
 <style>
 .chat-bubble {
@@ -42,7 +42,7 @@ st.markdown("""
 
 st.title("💬 AI Appointment Scheduler")
 
-# Init session state
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
@@ -50,7 +50,7 @@ if "proposed_time" not in st.session_state:
 if "input_key" not in st.session_state:
     st.session_state.input_key = "input_1"
 
-# Chat input (with dynamic key to force reset)
+
 user_input = st.text_input("You:", key=st.session_state.input_key, placeholder="e.g. Book a meeting on Friday at 2pm")
 
 if user_input:
@@ -72,18 +72,18 @@ if user_input:
     except Exception as e:
         st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
 
-    # Trick to clear input: change key so Streamlit resets the box
+    
     st.session_state.input_key = f"input_{len(st.session_state.messages)}"
     st.rerun()
 
-# Display messages
+
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
     css_class = "user" if msg["role"] == "user" else "bot"
     st.markdown(f"<div class='chat-bubble {css_class}'>{msg['text']}</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Booking UI
+
 if st.session_state.proposed_time:
     start = st.session_state.proposed_time
     end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
