@@ -83,13 +83,7 @@ def run_agent(message: str) -> dict:
 
     # ✅ Book meeting if datetime exists
     if parsed_date:
-        start = parsed_date.isoformat()
-        end = (parsed_date + timedelta(hours=1)).isoformat()
-        try:
-            create_event(start, end)
-            print("✅ Meeting booked from agent.py")
-        except Exception as e:
-            print("❌ Failed to create event:", str(e))
+    print("ℹ️ Datetime detected, waiting for user confirmation.")
 
     return {
         "reply": response_text,
