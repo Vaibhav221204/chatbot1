@@ -4,7 +4,6 @@ from langgraph.graph import StateGraph
 from typing import TypedDict
 from dotenv import load_dotenv
 import dateparser
-import re
 
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
@@ -38,25 +37,20 @@ def respond(state: AgentState) -> AgentState:
         )
 
         print("📬 Status Code:", response.status_code)
-
-        if response.status_code != 200:
-            return {"message": f"⚠️ Together API error: {response.status_code} - {response.text}"}
-
         data = response.json()
         print("📦 Raw response JSON:", data)
 
-        # Safe extraction
-        output = ""
-        if "choices" in data and isinstance(data["choices"], list):
-            output = data["choices"][0].get("text", "")
-        elif "output" in data:
-            output = data["output"]
+        # ✅ Extract text from structured JSON
+        if "output" in data and isinstance(data["output"], dict):
+            choices = data["output"].get("choices", [])
+            if choices and "text" in choices[0]:
+                reply_text = choices[0]["text"].strip()
+            else:
+                reply_text = "⚠️ No valid response text found."
+        else:
+            reply_text = str(data.get("output", "⚠️ No output."))
 
-        if not isinstance(output, str):
-            output = str(output)
-
-        cleaned = re.split(r"###\s*Assistant:", output)[-1].strip()
-        return {"message": cleaned}
+        return {"message": reply_text}
 
     except Exception as e:
         print("❌ Exception caught:", e)
