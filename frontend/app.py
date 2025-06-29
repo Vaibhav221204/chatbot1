@@ -19,7 +19,7 @@ if user_input:
         response = requests.post(f"{API_BASE}/chat", json={"message": user_input})
         result = response.json()
 
-        # ✅ FIX: Directly read the reply as a string
+        # ✅ Fix: Directly extract the reply string
         bot_message = result.get("reply", "⚠️ No reply")
 
         st.session_state.messages.append({"role": "bot", "text": bot_message})
