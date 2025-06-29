@@ -45,9 +45,9 @@ def respond(state: AgentState) -> AgentState:
         data = response.json()
         output = data.get("output", "")
 
-        # Clean the assistant's reply from the raw output
+        # Clean the assistant's reply from any system formatting
         cleaned = re.split(r"###\s*Assistant:", output)[-1].strip()
-        return {"message": cleaned}
+        return {"message": str(cleaned)}
 
     except Exception as e:
         print("❌ Exception caught:", e)
@@ -63,10 +63,10 @@ agent = workflow.compile()
 # External callable function for FastAPI
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
-    response_text = result["message"]
+    response_text = str(result.get("message", ""))
 
-    # Fix: message should be passed as a string, not the result dictionary
+    # Parse datetime from message text
     parsed_date = dateparser.parse(message)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
-    return {"reply": str(response_text), "datetime": datetime_str}
+    return {"reply": response_text, "datetime": datetime_str}
