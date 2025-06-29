@@ -38,5 +38,11 @@ class BookRequest(BaseModel):
 
 @app.post("/book")
 async def book(request: BookRequest):
-    result = calendar_utils.create_event(request.start, request.end)
-    return {"status": "Booked ✅", "event": result}
+    print("📥 Received booking request:", request.start, "to", request.end)
+    try:
+        result = calendar_utils.create_event(request.start, request.end)
+        print("✅ Event created:", result)
+        return {"status": "Booked ✅", "event": result}
+    except Exception as e:
+        print("❌ Booking failed:", e)
+        return {"status": "Failed ❌", "error": str(e)}
