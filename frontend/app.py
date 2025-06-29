@@ -19,13 +19,12 @@ if user_input:
         response = requests.post(f"{API_BASE}/chat", json={"message": user_input})
         result = response.json()
 
-        # ✅ reply is a simple string now
-        bot_message = result.get("reply", "⚠️ No reply received.")
-
+        # ✅ FIXED: assume `reply` is always a string
+        bot_message = result.get("reply", "")
         st.session_state.messages.append({"role": "bot", "text": bot_message})
         st.write("🤖 " + bot_message)
 
-        # Booking logic if datetime returned
+        # ✅ Optional booking if datetime is detected
         if result.get("datetime"):
             start = result["datetime"]
             end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
