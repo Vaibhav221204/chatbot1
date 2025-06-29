@@ -1,47 +1,31 @@
 import streamlit as st
 import requests
-import datetime
+import os
+
+API_BASE = "https://chatbot1-production-8826.up.railway.app"  # your deployed FastAPI base
 
 st.set_page_config(page_title="AI Appointment Scheduler", page_icon="📅")
-st.markdown("<h1 style='text-align: center;'>📅 AI Appointment Scheduler</h1>", unsafe_allow_html=True)
-
-API_BASE = "https://chatbot1-production-8826.up.railway.app"
+st.title("📅 AI Appointment Scheduler")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-with st.container():
-    for msg in st.session_state.messages:
-        role = "assistant" if msg["role"] == "assistant" else "user"
-        with st.chat_message(role):
-            st.markdown(msg["content"])
+user_input = st.chat_input("How can I help you?")
+if user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
 
-prompt = st.chat_input("How can I help you?")
-if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(user_input)
 
     with st.chat_message("assistant"):
         try:
-            response = requests.post(f"{API_BASE}/chat", json={"message": prompt})
+            # Send POST request with key 'query' as expected by FastAPI
+            response = requests.post(f"{API_BASE}/chat", json={"query": user_input})
+            response.raise_for_status()
             result = response.json()
-            reply = result.get("reply", "No reply received.")
-            dt = result.get("datetime")
-
-            st.session_state.datetime = dt
-            st.session_state.last_prompt = prompt
-            st.session_state.messages.append({"role": "assistant", "content": reply})
-            st.markdown(reply)
-
-            if dt:
-                if st.button("✅ Yes, book this meeting"):
-                    payload = {"datetime": dt, "user_input": st.session_state.last_prompt}
-                    book_response = requests.post(f"{API_BASE}/book", json=payload)
-                    if book_response.status_code == 200:
-                        st.success("✅ Meeting successfully booked!")
-                    else:
-                        st.error("❌ Booking failed.")
-
+            message = result["message"]
+            st.markdown("😊 " + message)
         except Exception as e:
-            st.error(f"⚠️ No reply received.\n\n{e}")
+            st.error(f"⚠️ No reply received.\n\nError: {str(e)}")
+
+    st.session_state.messages.append({"role": "assistant", "content": message})
