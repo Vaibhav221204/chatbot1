@@ -48,6 +48,8 @@ def respond(state: AgentState) -> AgentState:
         )
 
         data = response.json()
+        print("🔍 Full LLM response:", json.dumps(data, indent=2))
+
         output = data.get("output")
         if not output:
             return {"message": "⚠️ No output received from the model."}
