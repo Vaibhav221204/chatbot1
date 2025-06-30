@@ -45,7 +45,7 @@ def respond(state: AgentState) -> AgentState:
         )
 
         data = response.json()
-        parsed = json.loads(data.get("output", "{}"))
+        parsed = data["output"] if isinstance(data["output"], dict) else json.loads(data["output"])
         intent = parsed.get("intent", "unknown")
         datetime_str = parsed.get("datetime")
 
