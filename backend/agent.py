@@ -21,17 +21,23 @@ def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
     prompt = (
-        "You are a friendly and helpful scheduling assistant. Respond to the user naturally.\n"
-        "Also extract the user's intent and any time they mention in natural language.\n"
-        "Return this JSON structure:\n"
-        "{\\n"
-        "  \"reply\": \"Your assistant response.\",\\n"
-        "  \"intent\": \"check_slots\", \"book_meeting\", or \"unknown\",\\n"
-        "  \"time_text\": \"e.g. next Tuesday at 3pm\" or null\\n"
-        "}\n\n"
-        f"User: {message}\n"
-        "JSON:"
-    )
+    "You are a friendly and helpful scheduling assistant. Respond to the user naturally.\n"
+    "Classify the user's intent as one of:\n"
+    "- 'book_meeting'\n"
+    "- 'check_slots'\n"
+    "- 'greeting'\n"
+    "- 'unknown'\n"
+    "Also extract any natural language time expression if mentioned.\n"
+    "Return this JSON structure:\n"
+    "{\n"
+    "  \"reply\": \"Your assistant's response.\",\n"
+    "  \"intent\": \"greeting\" | \"book_meeting\" | \"check_slots\" | \"unknown\",\n"
+    "  \"time_text\": \"e.g. next Tuesday at 3pm\" or null\n"
+    "}\n\n"
+    f"User: {message}\n"
+    "JSON:"
+)
+
 
     try:
         response = requests.post(
