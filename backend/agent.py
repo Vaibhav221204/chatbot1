@@ -26,10 +26,26 @@ def is_time_query(text: str) -> bool:
     ]
     return any(re.search(p, text.lower()) for p in patterns)
 
+
+def is_tomorrow_query(text: str) -> bool:
+    patterns = [
+        r"\bwhat(?:'s| is)? the date tomorrow\b",
+        r"\btomorrow(?:'s)? date\b",
+        r"\bdate of tomorrow\b"
+    ]
+    return any(re.search(p, text.lower()) for p in patterns)
+
+
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
     if is_time_query(message):
+    if is_tomorrow_query(message):
+        tomorrow = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
+        return {
+            "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}."
+        }
+
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
             "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
