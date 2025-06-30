@@ -2,6 +2,7 @@
 import os
 import requests
 import json
+import re
 from langgraph.graph import StateGraph
 from typing import TypedDict
 from dotenv import load_dotenv
@@ -48,15 +49,19 @@ def respond(state: AgentState) -> AgentState:
         )
 
         data = response.json()
-        output = data.get("choices", [{}])[0].get("text", "")
+        raw_text = data.get("choices", [{}])[0].get("text", "")
 
-        if not output:
+        if not raw_text:
             return {"message": "⚠️ The model returned an empty response."}
 
+        matches = re.findall(r"{.*?}", raw_text, re.DOTALL)
+        if not matches:
+            return {"message": f"⚠️ Could not find valid JSON in output:\n\n{raw_text}"}
+
         try:
-            parsed = json.loads(output)
+            parsed = json.loads(matches[-1])
         except Exception:
-            return {"message": f"⚠️ Failed to parse model output:\n\n{output}"}
+            return {"message": f"⚠️ Failed to parse extracted JSON:\n\n{matches[-1]}"}
 
         reply = parsed.get("reply", "I'm here to help you schedule meetings.")
         intent = parsed.get("intent", "unknown")
