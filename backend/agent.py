@@ -21,17 +21,11 @@ def respond(state: AgentState) -> AgentState:
 
     # Step 1: Use LLM to extract intent and datetime (in ISO format)
     prompt = (
-        "You are a scheduling assistant. Analyze the user's message and extract their intent.
-"
-        "Return JSON with two fields:
-"
-        "1. intent: one of 'check_slots', 'book_meeting', or 'unknown'
-"
-        "2. datetime: the requested time in ISO 8601 format if mentioned, else null
-
-"
-        f"User: {message}
-"
+        "You are a scheduling assistant. Analyze the user's message and extract their intent."
+        "Return JSON with two fields:"
+        "1. intent: one of 'check_slots', 'book_meeting', or 'unknown'"
+        "2. datetime: the requested time in ISO 8601 format if mentioned, else null"
+        f"User: {message}"
         "JSON:"
     )
 
@@ -95,7 +89,7 @@ def respond(state: AgentState) -> AgentState:
         return {"message": "I'm not sure what you're asking. Can you clarify?"}
 
     except Exception as e:
-        return {"message": f"❌ Error: {str(e)}"}
+     return {"message": f"❌ Error: {str(e)}"}
 
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
