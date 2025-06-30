@@ -2,19 +2,18 @@ import os
 import requests
 import re
 from langgraph.graph import StateGraph
-from typing import TypedDict, List
+from typing import TypedDict
 from dotenv import load_dotenv
 import dateparser
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from backend.calendar_utils import create_event, get_available_slots
+from backend.calendar_utils import create_event, get_available_slots 
 
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
 
 class AgentState(TypedDict):
     message: str
-    history: List[str]
 
 def is_time_query(text: str) -> bool:
     patterns = [
@@ -27,6 +26,7 @@ def is_time_query(text: str) -> bool:
     ]
     return any(re.search(p, text.lower()) for p in patterns)
 
+
 def is_tomorrow_query(text: str) -> bool:
     patterns = [
         r"\bwhat(?:'s| is)? the date tomorrow\b",
@@ -34,6 +34,8 @@ def is_tomorrow_query(text: str) -> bool:
         r"\bdate of tomorrow\b"
     ]
     return any(re.search(p, text.lower()) for p in patterns)
+
+
 
 def is_today_query(text: str) -> bool:
     patterns = [
@@ -44,46 +46,45 @@ def is_today_query(text: str) -> bool:
     ]
     return any(re.search(p, text.lower()) for p in patterns)
 
+
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
-    history = state.get("history", [])
 
+    
     if is_time_query(message):
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
-            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}.",
-            "history": history
+            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
         }
 
     if is_tomorrow_query(message):
         tomorrow = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
         return {
-            "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}.",
-            "history": history
+            "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}."
         }
-
     if is_today_query(message):
         today = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
-            "message": f"Today's date is {today.strftime('%B %d, %Y')}.",
-            "history": history
+            "message": f"Today's date is {today.strftime('%B %d, %Y')}."
         }
 
-    # Append new user message to history and construct full chat
-    full_conversation = history + [f"User: {message}"]
-    history_prompt = "\n".join(full_conversation)
+    
+        now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        return {
+            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
+        }
 
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
        "You are a helpful and professional appointment scheduling assistant.\n"
-       "Respond only as the assistant, never as the user.\n"
-       "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.\n"
-       "If the user wants to book a meeting, ask for both date and time if missing.\n"
-       "Always confirm availability before booking by checking the calendar.\n"
-       "If time is already booked, ask the user to pick another slot.\n"
-       "Do not ask the user which service or purpose they need this appointment for.\n"
-       "Only confirm booking if time is available.\n"
-       f"{history_prompt}\nAssistant:"
+    "Respond only as the assistant, never as the user.\n"
+    "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.\n"
+    "If the user wants to book a meeting, ask for both date and time if missing.\n"
+    "Always confirm availability before booking by checking the calendar.\n"
+    "If time is already booked, ask the user to pick another slot.\n"
+    "do not ask the user which service or purpose you need this appointment for.\n"
+    "Only confirm booking if time is available.\n"
+    f"\nUser: {message}\nAssistant:"
     )
 
     try:
@@ -102,15 +103,19 @@ def respond(state: AgentState) -> AgentState:
         )
 
         data = response.json()
-        reply_text = data.get("output", {}).get("choices", [{}])[0].get("text", "⚠️ No valid response text found.").strip()
+        if "output" in data and isinstance(data["output"], dict):
+            choices = data["output"].get("choices", [])
+            if choices and "text" in choices[0]:
+                reply_text = choices[0]["text"].strip()
+            else:
+                reply_text = "⚠️ No valid response text found."
+        else:
+            reply_text = str(data.get("output", "⚠️ No output."))
 
-        return {
-            "message": reply_text,
-            "history": full_conversation + [f"Assistant: {reply_text}"]
-        }
+        return {"message": reply_text}
 
     except Exception as e:
-        return {"message": f"❌ Error: {str(e)}", "history": full_conversation}
+        return {"message": f"❌ Error: {str(e)}"}
 
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
@@ -118,11 +123,8 @@ workflow.set_entry_point("chat")
 workflow.set_finish_point("chat")
 agent = workflow.compile()
 
-def run_agent(message: str, history: List[str] = None) -> dict:
-    if history is None:
-        history = []
-
-    result = agent.invoke({"message": message, "history": history})
+def run_agent(message: str) -> dict:
+    result = agent.invoke({"message": message})
     response_text = result.get("message", "")
     parsed_date = dateparser.parse(
         message,
@@ -146,26 +148,22 @@ def run_agent(message: str, history: List[str] = None) -> dict:
 
                 if event_start <= requested_start < event_end:
                     return {
-                        "reply": "That time is not available.",
-                        "datetime": None,
-                        "history": result["history"]
+                        "reply": "That time is not available.?",
+                        "datetime": None
                     }
 
             return {
-                "reply": f"That time seems available (IST: {parsed_date.strftime('%A, %B %d at %I:%M %p')}). Would you like me to book it?",
-                "datetime": datetime_str,
-                "history": result["history"]
+                "reply": "That time seems available.Would you like me to book it?",
+                "datetime": datetime_str
             }
 
         except Exception as e:
             return {
                 "reply": f"⚠️ Failed to check calendar availability: {str(e)}",
-                "datetime": None,
-                "history": result["history"]
+                "datetime": None
             }
 
     return {
         "reply": response_text,
-        "datetime": datetime_str,
-        "history": result["history"]
+        "datetime": datetime_str
     }
