@@ -76,12 +76,14 @@ def respond(state: AgentState) -> AgentState:
 
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
-        "You are an appointment booking assistant. Stay focused only on scheduling meetings. "
-        "Do not roleplay both user and assistant. Only respond as the assistant.\n"
-        "Ask for date and time if not provided. Before confirming a meeting, check the calendar for conflicts.\n"
-        "If the time is already booked, ask the user to choose another slot. Otherwise, confirm and ask if you'd like to book it.\n"
-        "If the user asks for available time slots, use calendar data and respond accordingly.\n\n"
-        f"User: {message}\nAssistant:"
+       "You are a helpful and professional appointment scheduling assistant.\n"
+    "Respond only as the assistant, never as the user.\n"
+    "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.\n"
+    "If the user wants to book a meeting, ask for both date and time if missing.\n"
+    "Always confirm availability before booking by checking the calendar.\n"
+    "If time is already booked, ask the user to pick another slot.\n"
+    "Only confirm booking if time is available.\n"
+    f"\nUser: {message}\nAssistant:"
     )
 
     try:
@@ -127,7 +129,7 @@ def run_agent(message: str) -> dict:
         message,
         settings={
             'TIMEZONE': 'Asia/Kolkata',
-            'TO_TIMEZONE': 'UTC',
+            'TO_TIMEZONE': 'Asia/Kolkata',
             'RETURN_AS_TIMEZONE_AWARE': True
         }
     )
@@ -145,12 +147,12 @@ def run_agent(message: str) -> dict:
 
                 if event_start <= requested_start < event_end:
                     return {
-                        "reply": "That time is not available. Would you like me to book it?",
+                        "reply": "That time is not available.?",
                         "datetime": None
                     }
 
             return {
-                "reply": "That time seems available (based on IST). Would you like me to book it?",
+                "reply": "That time seems available (IST: {parsed_date.strftime('%A, %B %d at %I:%M %p')}). Would you like me to book it?",
                 "datetime": datetime_str
             }
 
