@@ -21,15 +21,22 @@ def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
     prompt = (f"""
-You are a friendly and helpful scheduling assistant. Respond to the user naturally.
-If the user just greets or says something casual (like 'hi', 'how are you?'), respond politely and keep the intent as 'unknown'.
-Only extract date/time and intent if the user is actually trying to book or check a meeting.
+You are a friendly and helpful scheduling assistant. Always respond to the user naturally and professionally.
 
-Return this JSON structure:
+Your job is to:
+1. Extract the user's intent: whether they are trying to **book a meeting**, **check available time slots**, or are just making **small talk**.
+2. Extract any time-related information they mention (like 'tomorrow at 2pm') only if it’s relevant.
+
+**Important:**
+- If the user is just greeting or making small talk (like "hi", "hello", "how’s it going?", "yo!", or even something random like "what’s the time"), do **not** try to book a meeting or show slots.
+- In those cases, just give a polite response and set the intent to `"unknown"`, and `time_text` to `null`.
+
+Return your answer in this exact JSON format:
+
 {{
-  "reply": "Your assistant response.",
-  "intent": "check_slots", "book_meeting", or "unknown",
-  "time_text": "e.g. next Tuesday at 3pm" or null
+  "reply": "Your assistant's natural reply",
+  "intent": "book_meeting" | "check_slots" | "unknown",
+  "time_text": "e.g. tomorrow at 2pm" or null
 }}
 
 User: {message}
