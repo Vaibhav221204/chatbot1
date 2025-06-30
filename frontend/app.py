@@ -58,7 +58,7 @@ if user_input:
     try:
         response = requests.post(f"{API_BASE}/chat", json={
             "message": user_input,
-            "history": [m["text"] for m in st.session_state.messages if m["role"] in ["user", "bot"]]
+            "history": [f"{m['role'].capitalize()}: {m['text']}" for m in st.session_state.messages if m['role'] in ['user', 'bot']]
         })
         result = response.json()
         reply = result.get("reply", "⚠️ No reply received.")
