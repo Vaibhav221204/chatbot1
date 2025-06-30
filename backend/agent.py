@@ -41,7 +41,7 @@ def respond(state: AgentState) -> AgentState:
                 "Content-Type": "application/json"
             },
             json={
-                "model": "mistralai/Mistral-7B-Instruct-v0.1",
+                "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
                 "prompt": prompt,
                 "max_tokens": 256,
                 "temperature": 0.4
@@ -51,7 +51,7 @@ def respond(state: AgentState) -> AgentState:
         data = response.json()
         parsed = data["output"] if isinstance(data["output"], dict) else json.loads(data["output"])
 
-        reply = parsed.get("reply", "I'm here to help you schedule meetings.")
+        reply = parsed.get("reply", "Hii,I'm here to help you schedule meetings.")
         intent = parsed.get("intent", "unknown")
         datetime_str = parsed.get("datetime")
 
