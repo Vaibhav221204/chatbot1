@@ -1,3 +1,4 @@
+
 import os
 import requests
 import re
@@ -7,7 +8,7 @@ from dotenv import load_dotenv
 import dateparser
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from backend.calendar_utils import create_event, get_available_slots 
+from backend.calendar_utils import create_event, get_available_slots, get_free_slots_for_day
 
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
@@ -15,65 +16,37 @@ api_key = os.getenv("TOGETHER_API_KEY")
 class AgentState(TypedDict):
     message: str
 
-def is_time_query(text: str) -> bool:
-    patterns = [
-        r"\bwhat(?:'s| is)? the time\b",
-        r"\bcurrent time\b",
-        r"\btell me the time\b",
-        r"\btime now\b",
-        r"\bwhat time is it\b",
-        r"\bdo you know the time\b"
-    ]
-    return any(re.search(p, text.lower()) for p in patterns)
-
-
-def is_tomorrow_query(text: str) -> bool:
-    patterns = [
-        r"\bwhat(?:'s| is)? the date tomorrow\b",
-        r"\btomorrow(?:'s)? date\b",
-        r"\bdate of tomorrow\b"
-    ]
-    return any(re.search(p, text.lower()) for p in patterns)
-
-
-
-def is_today_query(text: str) -> bool:
-    patterns = [
-        r"\bwhat(?:'s| is|s)? the date today\b",
-        r"\btoday(?:'s)? date\b",
-        r"\bdate of today\b",
-        r"\bwhats the date today\b"
-    ]
-    return any(re.search(p, text.lower()) for p in patterns)
-
+def is_slot_query(text: str) -> bool:
+    keywords = ["slots", "availability", "free time", "are you free", "when can i book", "when are you available"]
+    return any(k in text.lower() for k in keywords)
 
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
-    
-    if is_time_query(message):
-        now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    if is_slot_query(message):
+        target_date = dateparser.parse(
+            message,
+            settings={
+                'TIMEZONE': 'Asia/Kolkata',
+                'TO_TIMEZONE': 'UTC',
+                'RETURN_AS_TIMEZONE_AWARE': True
+            }
+        )
+        if not target_date:
+            return {"message": "Could you please tell me which day you're asking about?"}
+
+        local_day = target_date.astimezone(ZoneInfo("Asia/Kolkata")).strftime('%A, %B %d')
+        free_slots = get_free_slots_for_day(target_date.date())
+
+        if not free_slots:
+            return {"message": f"I'm fully booked on {local_day}."}
+
+        formatted = "\n".join([f"• {datetime.fromisoformat(start).astimezone(ZoneInfo('Asia/Kolkata')).strftime('%I:%M %p')} – {datetime.fromisoformat(end).astimezone(ZoneInfo('Asia/Kolkata')).strftime('%I:%M %p')}" for start, end in free_slots])
         return {
-            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
+            "message": f"Here are my available slots on {local_day}:\n{formatted}\nWould you like to book one?"
         }
 
-    if is_tomorrow_query(message):
-        tomorrow = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
-        return {
-            "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}."
-        }
-    if is_today_query(message):
-        today = datetime.now(ZoneInfo("Asia/Kolkata"))
-        return {
-            "message": f"Today's date is {today.strftime('%B %d, %Y')}."
-        }
-
-    
-        now = datetime.now(ZoneInfo("Asia/Kolkata"))
-        return {
-            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
-        }
-
+    # fallback to LLM
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
         "You are an appointment booking assistant. Stay focused only on scheduling meetings. "
