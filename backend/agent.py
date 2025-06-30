@@ -22,12 +22,12 @@ def respond(state: AgentState) -> AgentState:
 
     prompt = (
         "You are a friendly and helpful scheduling assistant. Respond to the user naturally.\n"
-        "Also extract the user's intent and any datetime they mention.\n"
+        "Also extract the user's intent and any time they mention in natural language.\n"
         "Return this JSON structure:\n"
         "{\\n"
-        "  \"reply\": \"Your natural response to the user.\",\\n"
+        "  \"reply\": \"Your assistant response.\",\\n"
         "  \"intent\": \"check_slots\", \"book_meeting\", or \"unknown\",\\n"
-        "  \"datetime\": \"ISO 8601 string or null\"\\n"
+        "  \"time_text\": \"e.g. next Tuesday at 3pm\" or null\\n"
         "}\n\n"
         f"User: {message}\n"
         "JSON:"
@@ -50,7 +50,6 @@ def respond(state: AgentState) -> AgentState:
 
         data = response.json()
         raw_text = data.get("choices", [{}])[0].get("text", "")
-
         if not raw_text:
             return {"message": "⚠️ The model returned an empty response."}
 
@@ -65,15 +64,30 @@ def respond(state: AgentState) -> AgentState:
 
         reply = parsed.get("reply", "I'm here to help you schedule meetings.")
         intent = parsed.get("intent", "unknown")
-        datetime_str = parsed.get("datetime")
+        time_text = parsed.get("time_text")
 
-        if intent == "check_slots" and datetime_str:
-            target = datetime.fromisoformat(datetime_str).astimezone(ZoneInfo("Asia/Kolkata"))
-            local_day = target.strftime('%A, %B %d')
-            free_slots = get_free_slots_for_day(target.date())
+        # If it's not a scheduling intent, just return reply
+        if intent == "unknown":
+            return {"message": reply}
+
+        # Try parsing datetime from the natural time string
+        parsed_date = None
+        if time_text:
+            parsed_date = dateparser.parse(
+                time_text,
+                settings={
+                    'TIMEZONE': 'Asia/Kolkata',
+                    'TO_TIMEZONE': 'UTC',
+                    'RETURN_AS_TIMEZONE_AWARE': True
+                }
+            )
+
+        if intent == "check_slots" and parsed_date:
+            local_day = parsed_date.astimezone(ZoneInfo("Asia/Kolkata")).strftime('%A, %B %d')
+            free_slots = get_free_slots_for_day(parsed_date.date())
 
             if not free_slots:
-                return {"message": f"I'm fully booked on {local_day}."}
+                return {"message": f"{reply}\n\nI'm fully booked on {local_day}."}
 
             formatted = "\n".join([
                 f"• {datetime.fromisoformat(start).astimezone(ZoneInfo('Asia/Kolkata')).strftime('%I:%M %p')} – {datetime.fromisoformat(end).astimezone(ZoneInfo('Asia/Kolkata')).strftime('%I:%M %p')}"
@@ -83,8 +97,8 @@ def respond(state: AgentState) -> AgentState:
                 "message": f"{reply}\n\nHere are my available slots on {local_day}:\n{formatted}\nWould you like to book one?"
             }
 
-        elif intent == "book_meeting" and datetime_str:
-            requested_start = datetime.fromisoformat(datetime_str)
+        elif intent == "book_meeting" and parsed_date:
+            requested_start = parsed_date
             requested_end = requested_start + timedelta(hours=1)
 
             events = get_available_slots()
