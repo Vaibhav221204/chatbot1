@@ -152,7 +152,7 @@ def run_agent(message: str) -> dict:
                     }
 
             return {
-                "reply": "That time seems available (IST: {parsed_date.strftime('%A, %B %d at %I:%M %p')}). Would you like me to book it?",
+                "reply": "That time seems available.Would you like me to book it?",
                 "datetime": datetime_str
             }
 
