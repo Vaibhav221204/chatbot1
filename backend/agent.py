@@ -16,9 +16,23 @@ api_key = os.getenv("TOGETHER_API_KEY")
 class AgentState(TypedDict):
     message: str
 
+
 def is_slot_query(text: str) -> bool:
-    keywords = ["slots", "availability", "free time", "are you free", "when can i book", "when are you available"]
-    return any(k in text.lower() for k in keywords)
+    patterns = [
+        r"available slots",
+        r"any free time",
+        r"when are you (available|free)",
+        r"do you have time",
+        r"what time are you free",
+        r"slots on",
+        r"can i book you",
+        r"book.*appointment",
+        r"availability on",
+        r"free slots",
+        r"open slots"
+    ]
+    return any(re.search(p, text.lower()) for p in patterns)
+
 
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
