@@ -48,16 +48,15 @@ def respond(state: AgentState) -> AgentState:
         )
 
         data = response.json()
-        print("🔍 Full LLM response:", json.dumps(data, indent=2))
+        output = data.get("choices", [{}])[0].get("text", "")
 
-        output = data.get("output")
         if not output:
-            return {"message": "⚠️ No output received from the model."}
+            return {"message": "⚠️ The model returned an empty response."}
 
         try:
-            parsed = output if isinstance(output, dict) else json.loads(output)
+            parsed = json.loads(output)
         except Exception:
-            return {"message": f"⚠️ Could not parse model output: {output}"}
+            return {"message": f"⚠️ Failed to parse model output:\n\n{output}"}
 
         reply = parsed.get("reply", "I'm here to help you schedule meetings.")
         intent = parsed.get("intent", "unknown")
