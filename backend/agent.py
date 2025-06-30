@@ -21,20 +21,27 @@ def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
     prompt = (
-    "You are a friendly and helpful scheduling assistant. Respond to the user naturally.\n"
-    "Classify the user's intent as one of:\n"
-    "- 'book_meeting'\n"
-    "- 'check_slots'\n"
-    "- 'greeting'\n"
-    "- 'unknown'\n"
-    "Also extract any natural language time expression if mentioned.\n"
-    "Return this JSON structure:\n"
-    "{\n"
-    "  \"reply\": \"Your assistant's response.\",\n"
-    "  \"intent\": \"greeting\" | \"book_meeting\" | \"check_slots\" | \"unknown\",\n"
-    "  \"time_text\": \"e.g. next Tuesday at 3pm\" or null\n"
-    "}\n\n"
-    f"User: {message}\n"
+    "You are a friendly and helpful scheduling assistant. Respond to the user naturally.
+"
+    "If the user just greets or says something casual (like 'hi', 'how are you?'), respond politely and keep the intent as 'unknown'.
+"
+    "Only extract date/time and intent if the user is actually trying to book or check a meeting.
+"
+    "Return this JSON structure:
+"
+    "{
+"
+    "  \"reply\": \"Your assistant response.\",
+"
+    "  \"intent\": \"check_slots\", \"book_meeting\", or \"unknown\",
+"
+    "  \"time_text\": \"e.g. next Tuesday at 3pm\" or null
+"
+    "}
+
+"
+    f"User: {message}
+"
     "JSON:"
 )
 
