@@ -39,13 +39,19 @@ def is_tomorrow_query(text: str) -> bool:
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
+    
     if is_time_query(message):
+        now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        return {
+            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
+        }
+
     if is_tomorrow_query(message):
         tomorrow = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
         return {
             "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}."
         }
-
+    
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
             "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
