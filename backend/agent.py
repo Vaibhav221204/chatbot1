@@ -51,21 +51,27 @@ def respond(state: AgentState) -> AgentState:
     if is_time_query(message):
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
-            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
+            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}.",
+            "history": history
         }
 
     if is_tomorrow_query(message):
         tomorrow = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
         return {
-            "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}."
+            "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}.",
+            "history": history
         }
+
     if is_today_query(message):
         today = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
-            "message": f"Today's date is {today.strftime('%B %d, %Y')}."
+            "message": f"Today's date is {today.strftime('%B %d, %Y')}.",
+            "history": history
         }
 
-    full_conversation = "\n".join(history + [f"User: {message}"])
+    # Append new user message to history and construct full chat
+    full_conversation = history + [f"User: {message}"]
+    history_prompt = "\n".join(full_conversation)
 
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
@@ -77,7 +83,7 @@ def respond(state: AgentState) -> AgentState:
        "If time is already booked, ask the user to pick another slot.\n"
        "Do not ask the user which service or purpose they need this appointment for.\n"
        "Only confirm booking if time is available.\n"
-       f"{full_conversation}\nAssistant:"
+       f"{history_prompt}\nAssistant:"
     )
 
     try:
@@ -100,11 +106,11 @@ def respond(state: AgentState) -> AgentState:
 
         return {
             "message": reply_text,
-            "history": history + [f"User: {message}", f"Assistant: {reply_text}"]
+            "history": full_conversation + [f"Assistant: {reply_text}"]
         }
 
     except Exception as e:
-        return {"message": f"❌ Error: {str(e)}", "history": history}
+        return {"message": f"❌ Error: {str(e)}", "history": full_conversation}
 
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
