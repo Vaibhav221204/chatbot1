@@ -19,17 +19,16 @@ class AgentState(TypedDict):
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
-    # Unified prompt to handle both conversation + logic
     prompt = (
-        "You are a friendly and helpful scheduling assistant. Respond to the user naturally."
-        "Also extract the user's intent and any datetime they mention."
-        "Return this JSON structure:"
-        "{\n"
-        "  \"reply\": \"Your natural response to the user.\",\n"
-        "  \"intent\": \"check_slots\", \"book_meeting\", or \"unknown\",\n"
-        "  \"datetime\": \"ISO 8601 string or null\"\n"
-        "}"
-        f"User: {message}"
+        "You are a friendly and helpful scheduling assistant. Respond to the user naturally.\n"
+        "Also extract the user's intent and any datetime they mention.\n"
+        "Return this JSON structure:\n"
+        "{\\n"
+        "  \"reply\": \"Your natural response to the user.\",\\n"
+        "  \"intent\": \"check_slots\", \"book_meeting\", or \"unknown\",\\n"
+        "  \"datetime\": \"ISO 8601 string or null\"\\n"
+        "}\n\n"
+        f"User: {message}\n"
         "JSON:"
     )
 
@@ -49,13 +48,19 @@ def respond(state: AgentState) -> AgentState:
         )
 
         data = response.json()
-        parsed = data["output"] if isinstance(data["output"], dict) else json.loads(data["output"])
+        output = data.get("output")
+        if not output:
+            return {"message": "⚠️ No output received from the model."}
 
-        reply = parsed.get("reply", "Hii,I'm here to help you schedule meetings.")
+        try:
+            parsed = output if isinstance(output, dict) else json.loads(output)
+        except Exception:
+            return {"message": f"⚠️ Could not parse model output: {output}"}
+
+        reply = parsed.get("reply", "I'm here to help you schedule meetings.")
         intent = parsed.get("intent", "unknown")
         datetime_str = parsed.get("datetime")
 
-        # Handle intent-based behavior
         if intent == "check_slots" and datetime_str:
             target = datetime.fromisoformat(datetime_str).astimezone(ZoneInfo("Asia/Kolkata"))
             local_day = target.strftime('%A, %B %d')
@@ -64,7 +69,10 @@ def respond(state: AgentState) -> AgentState:
             if not free_slots:
                 return {"message": f"I'm fully booked on {local_day}."}
 
-            formatted = "\n".join([f"• {datetime.fromisoformat(start).astimezone(ZoneInfo('Asia/Kolkata')).strftime('%I:%M %p')} – {datetime.fromisoformat(end).astimezone(ZoneInfo('Asia/Kolkata')).strftime('%I:%M %p')}" for start, end in free_slots])
+            formatted = "\n".join([
+                f"• {datetime.fromisoformat(start).astimezone(ZoneInfo('Asia/Kolkata')).strftime('%I:%M %p')} – {datetime.fromisoformat(end).astimezone(ZoneInfo('Asia/Kolkata')).strftime('%I:%M %p')}"
+                for start, end in free_slots
+            ])
             return {
                 "message": f"{reply}\n\nHere are my available slots on {local_day}:\n{formatted}\nWould you like to book one?"
             }
@@ -89,7 +97,7 @@ def respond(state: AgentState) -> AgentState:
         return {"message": reply}
 
     except Exception as e:
-     return {"message": f"❌ Error: {str(e)}"}
+        return {"message": f"❌ Error: {str(e)}"}
 
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
