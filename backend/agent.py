@@ -63,15 +63,17 @@ def respond(state: AgentState) -> AgentState:
     convo = "\n".join([f"User: {h}" if i % 2 == 0 else f"Assistant: {h}" for i, h in enumerate(history)])
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
-        "You are a helpful and professional appointment scheduling assistant.\n"
-        "Respond only as the assistant, never as the user.\n"
-        "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.\n"
-        "If the user wants to book a meeting, ask for both date and time if missing.\n"
-        "Always confirm availability before booking by checking the calendar.\n"
-        "If time is already booked, ask the user to pick another slot.\n"
-        "Only confirm booking if time is available.\n\n"
-        + convo + f"\nUser: {message}\nAssistant:"
+       "You are a helpful and professional appointment scheduling assistant.\n"
+    "Respond only as the assistant, never as the user.\n"
+    "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.\n"
+    "If the user wants to book a meeting, ask for both date and time if missing.\n"
+    "Always confirm availability before booking by checking the calendar.\n"
+    "If time is already booked, ask the user to pick another slot.\n"
+    "do not ask the user which service or purpose you need this appointment for.\n"
+    "Only confirm booking if time is available.\n"
+    f"\nUser: {message}\nAssistant:"
     )
+
 
     try:
         response = requests.post(
