@@ -36,6 +36,17 @@ def is_tomorrow_query(text: str) -> bool:
     return any(re.search(p, text.lower()) for p in patterns)
 
 
+
+def is_today_query(text: str) -> bool:
+    patterns = [
+        r"\bwhat(?:'s| is|s)? the date today\b",
+        r"\btoday(?:'s)? date\b",
+        r"\bdate of today\b",
+        r"\bwhats the date today\b"
+    ]
+    return any(re.search(p, text.lower()) for p in patterns)
+
+
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
@@ -51,6 +62,12 @@ def respond(state: AgentState) -> AgentState:
         return {
             "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}."
         }
+    if is_today_query(message):
+        today = datetime.now(ZoneInfo("Asia/Kolkata"))
+        return {
+            "message": f"Today's date is {today.strftime('%B %d, %Y')}."
+        }
+
     
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
