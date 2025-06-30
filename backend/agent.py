@@ -22,6 +22,9 @@ def respond(state: AgentState) -> AgentState:
 
     prompt = (
     "You are a friendly and helpful scheduling assistant. Respond to the user naturally.\n"
+    "Your job is to assist with booking meetings or checking availability.\n"
+    "**Only infer a booking or check_slots intent if the user clearly asks about scheduling.**\n"
+    "**Do NOT assume a time if the user hasn't mentioned one.**\n"
     "Classify the user's intent as one of:\n"
     "- 'book_meeting'\n"
     "- 'check_slots'\n"
