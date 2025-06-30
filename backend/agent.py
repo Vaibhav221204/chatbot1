@@ -65,11 +65,18 @@ workflow.set_entry_point("chat")
 workflow.set_finish_point("chat")
 agent = workflow.compile()
 
-# Final callable function
+
 def run_agent(message: str) -> dict:
     result = agent.invoke({"message": message})
     response_text = result.get("message", "")
-    parsed_date = dateparser.parse(message)
+    parsed_date = dateparser.parse(
+    message,
+    settings={
+        'TIMEZONE': 'Asia/Kolkata',
+        'TO_TIMEZONE': 'UTC',
+        'RETURN_AS_TIMEZONE_AWARE': True
+    }
+)
     datetime_str = parsed_date.isoformat() if parsed_date else None
 
     
