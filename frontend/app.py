@@ -87,8 +87,10 @@ st.markdown("</div>", unsafe_allow_html=True)
 if st.session_state.proposed_time:
     start = st.session_state.proposed_time
     end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
-    st.markdown("🕒 **Proposed time:** " + datetime.fromisoformat(start).strftime("%A, %B %d at %I:%M %p"))
+    from zoneinfo import ZoneInfo  # Top of file (Python 3.9+)
 
+    local_time = datetime.fromisoformat(start).astimezone(ZoneInfo("Asia/Kolkata"))
+    st.markdown("🕒 **Proposed time:** " + local_time.strftime("%A, %B %d at %I:%M %p"))
     if st.button("✅ Yes, book this meeting"):
         booking = requests.post(f"{API_BASE}/book", json={"start": start, "end": end})
         if booking.status_code == 200:
