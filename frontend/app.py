@@ -1,11 +1,12 @@
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
-API_BASE = "https://chatbot1-production-8826.up.railway.app"
+API_BASE = "https://chatbot1-production-8826-up.railway.app"
 
-
+# ——— Your original styling/UI code ———
 st.markdown("""
 <style>
 .chat-bubble {
@@ -41,8 +42,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("💬 AI Appointment Scheduler")
+# —————————————————————————————
 
-
+# session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
@@ -50,45 +52,49 @@ if "proposed_time" not in st.session_state:
 if "input_key" not in st.session_state:
     st.session_state.input_key = "input_1"
 
-
-user_input = st.text_input("You:", key=st.session_state.input_key, placeholder="e.g. Book a meeting on Friday at 2pm")
+# user input
+user_input = st.text_input(
+    "You:",
+    key=st.session_state.input_key,
+    placeholder="e.g. Book a meeting on Friday at 2pm"
+)
 
 if user_input:
+    # append user message
     st.session_state.messages.append({"role": "user", "text": user_input})
-    try:
-        response = requests.post(f"{API_BASE}/chat", json={
-            "message": user_input,
-            "history": [m["text"] for m in st.session_state.messages if m["role"] in ["user", "bot"]]
-        })
-        result = response.json()
-        reply = result.get("reply", "⚠️ No reply received.")
+    # build history to send
+    history_texts = [m["text"] for m in st.session_state.messages]
 
-        if "I have scheduled" not in reply and "meeting booked" not in reply.lower():
-            st.session_state.messages.append({"role": "bot", "text": reply})
+    # call backend with history
+    response = requests.post(
+        f"{API_BASE}/chat",
+        json={"message": user_input, "history": history_texts}
+    )
+    result = response.json()
+    reply = result.get("reply", "⚠️ No reply received.")
 
-        if result.get("datetime"):
-            st.session_state.proposed_time = result["datetime"]
+    # append bot reply
+    st.session_state.messages.append({"role": "bot", "text": reply})
 
-    except Exception as e:
-        st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
+    # if backend set a datetime, capture it for booking button
+    if result.get("datetime"):
+        st.session_state.proposed_time = result["datetime"]
 
-    
+    # advance input key & rerun
     st.session_state.input_key = f"input_{len(st.session_state.messages)}"
     st.rerun()
 
-
+# render the chat bubbles
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
-    css_class = "user" if msg["role"] == "user" else "bot"
-    st.markdown(f"<div class='chat-bubble {css_class}'>{msg['text']}</div>", unsafe_allow_html=True)
+    css = "user" if msg["role"] == "user" else "bot"
+    st.markdown(f"<div class='chat-bubble {css}'>{msg['text']}</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-
+# booking button when we have a proposed_time
 if st.session_state.proposed_time:
     start = st.session_state.proposed_time
     end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
-    from zoneinfo import ZoneInfo  # Top of file (Python 3.9+)
-
     local_time = datetime.fromisoformat(start).astimezone(ZoneInfo("Asia/Kolkata"))
     st.markdown("🕒 **Proposed time:** " + local_time.strftime("%A, %B %d at %I:%M %p"))
     if st.button("✅ Yes, book this meeting"):
@@ -97,7 +103,7 @@ if st.session_state.proposed_time:
             st.success("📅 Meeting booked successfully!")
             st.session_state.messages.append({
                 "role": "bot",
-                "text": f"✅ Your meeting has been booked for {datetime.fromisoformat(start).strftime('%B %d at %I:%M %p')}."
+                "text": f"✅ Your meeting has been booked for {local_time.strftime('%B %d at %I:%M %p')}."
             })
             st.session_state.proposed_time = None
         else:
