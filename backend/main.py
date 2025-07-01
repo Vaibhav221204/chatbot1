@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 from backend import calendar_utils
 from backend.agent import run_agent
 from dotenv import load_dotenv
 
 load_dotenv()
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -25,11 +26,10 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    # now also returns slots if this was an 'available slots' query
     result = run_agent(request.message, request.history)
     return {
         "reply": result["reply"],
-        "datetime": result.get("datetime"),
+        "datetime": result["datetime"],
         "slots": result.get("slots", [])
     }
 
@@ -43,11 +43,11 @@ class BookRequest(BaseModel):
 
 @app.post("/book")
 async def book(request: BookRequest):
-    print("📥 Received booking request:", request.start, "→", request.end)
+    print("📥 Received booking request:", request.start, "to", request.end)
     try:
-        result = calendar_utils.create_event(request.start, request.end)
-        print("✅ Event created:", result)
-        return {"status": "Booked ✅", "event": result}
+        ev = calendar_utils.create_event(request.start, request.end)
+        print("✅ Event created:", ev)
+        return {"status": "Booked ✅", "event": ev}
     except Exception as e:
         print("❌ Booking failed:", e)
         return {"status": "Failed ❌", "error": str(e)}
