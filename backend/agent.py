@@ -116,7 +116,7 @@ def respond(state: AgentState) -> AgentState:
                reply_text = reply_text.split("User:")[0].strip()
                 
             else:
-                reply_text = "⚠️ No valid response text found."
+                reply_text = "⚠️ No valid response text found."#
         else:
             reply_text = str(data.get("output", "⚠️ No output."))
 
