@@ -40,11 +40,9 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-
 st.title("💬 AI Appointment Scheduler")
 # —————————————————————————————
 
-# session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "proposed_time" not in st.session_state:
@@ -52,46 +50,42 @@ if "proposed_time" not in st.session_state:
 if "input_key" not in st.session_state:
     st.session_state.input_key = "input_1"
 
-# user input
 user_input = st.text_input(
-    "You:",
-    key=st.session_state.input_key,
+    "You:", key=st.session_state.input_key,
     placeholder="e.g. Book a meeting on Friday at 2pm"
 )
 
 if user_input:
-    # append user message
     st.session_state.messages.append({"role": "user", "text": user_input})
-    # build history to send
     history_texts = [m["text"] for m in st.session_state.messages]
 
-    # call backend with history
+    # send both message + history
     response = requests.post(
         f"{API_BASE}/chat",
         json={"message": user_input, "history": history_texts}
     )
-    result = response.json()
-    reply = result.get("reply", "⚠️ No reply received.")
+    try:
+        result = response.json()
+    except requests.JSONDecodeError:
+        st.error(f"Unexpected server response:\n\n{response.text}")
+        st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+        st.rerun()
 
-    # append bot reply
+    reply = result.get("reply", "⚠️ No reply received.")
     st.session_state.messages.append({"role": "bot", "text": reply})
 
-    # if backend set a datetime, capture it for booking button
     if result.get("datetime"):
         st.session_state.proposed_time = result["datetime"]
 
-    # advance input key & rerun
     st.session_state.input_key = f"input_{len(st.session_state.messages)}"
     st.rerun()
 
-# render the chat bubbles
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
     css = "user" if msg["role"] == "user" else "bot"
     st.markdown(f"<div class='chat-bubble {css}'>{msg['text']}</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# booking button when we have a proposed_time
 if st.session_state.proposed_time:
     start = st.session_state.proposed_time
     end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
