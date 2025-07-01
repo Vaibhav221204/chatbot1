@@ -113,7 +113,7 @@ def respond(state: AgentState) -> AgentState:
                if "I've booked" in reply_text or "I have scheduled" in reply_text:
                 reply_text = "Please confirm if you'd like me to book it."
               else:
-              reply_text = reply_text.split("User:")[0].strip()
+               reply_text = reply_text.split("User:")[0].strip()
                 
             else:
                 reply_text = "⚠️ No valid response text found."
