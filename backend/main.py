@@ -22,11 +22,10 @@ def root():
 
 class ChatRequest(BaseModel):
     message: str
-    history: list[str] = []
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    result = run_agent(request.message, request.history)
+    result = run_agent(request.message)
     return {"reply": result["reply"], "datetime": result["datetime"]}
 
 @app.get("/slots")
