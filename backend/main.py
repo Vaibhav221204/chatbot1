@@ -7,7 +7,6 @@ from backend.agent import run_agent
 from dotenv import load_dotenv
 
 load_dotenv()
-
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -43,11 +42,8 @@ class BookRequest(BaseModel):
 
 @app.post("/book")
 async def book(request: BookRequest):
-    print("📥 Received booking request:", request.start, "to", request.end)
     try:
         ev = calendar_utils.create_event(request.start, request.end)
-        print("✅ Event created:", ev)
         return {"status": "Booked ✅", "event": ev}
     except Exception as e:
-        print("❌ Booking failed:", e)
         return {"status": "Failed ❌", "error": str(e)}
