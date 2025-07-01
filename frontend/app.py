@@ -42,7 +42,6 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-
 st.title("💬 AI Appointment Scheduler")
 # —————————————————————————————
 
@@ -63,10 +62,10 @@ user_input = st.text_input(
 )
 
 if user_input:
-    # Store user message
+    # 1) record user message
     st.session_state.messages.append({"role": "user", "text": user_input})
 
-    # 1) Auto-yes intercept: preserve booking button
+    # 2) intercept “yes” to keep booking button
     if user_input.strip().lower() in ("yes", "y", "sure", "please") \
        and st.session_state.proposed_time:
         st.session_state.messages.append({
@@ -76,7 +75,7 @@ if user_input:
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # 2) Direct time pick from last_slots
+    # 3) intercept direct time picks
     parsed = dateparser.parse(
         user_input,
         settings={
@@ -85,23 +84,21 @@ if user_input:
             "RETURN_AS_TIMEZONE_AWARE": True
         }
     )
-    if parsed:
-        iso = parsed.isoformat()
-        if iso in st.session_state.last_slots:
-            st.session_state.proposed_time = iso
-            st.session_state.input_key = f"input_{len(st.session_state.messages)}"
-            st.rerun()
+    if parsed and parsed.isoformat() in st.session_state.last_slots:
+        st.session_state.proposed_time = parsed.isoformat()
+        st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+        st.rerun()
 
-    # 3) Ordinal pick (first/second/third)
-    m = re.search(r"\b(first|second|third|fourth)\b", user_input.lower())
-    if m and st.session_state.last_slots:
-        idx = {"first":0, "second":1, "third":2, "fourth":3}[m.group(1)]
+    # 4) intercept ordinal picks
+    el = re.search(r"\b(first|second|third|fourth)\b", user_input.lower())
+    if el and st.session_state.last_slots:
+        idx = {"first":0, "second":1, "third":2, "fourth":3}[el.group(1)]
         if idx < len(st.session_state.last_slots):
             st.session_state.proposed_time = st.session_state.last_slots[idx]
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # 4) Normal /chat call with history
+    # 5) fallback to normal chat call
     history_texts = [m["text"] for m in st.session_state.messages]
     resp = requests.post(
         f"{API_BASE}/chat",
@@ -114,31 +111,28 @@ if user_input:
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # Append assistant reply
+    # append bot reply
     reply = result.get("reply", "⚠️ No reply received.")
     st.session_state.messages.append({"role": "bot", "text": reply})
 
-    # Cache raw slots list if present
+    # capture slots if returned
     slots = result.get("slots", [])
     if isinstance(slots, list) and slots:
         st.session_state.last_slots = slots
 
-    # Capture datetime for booking button
+    # capture datetime for booking
     if result.get("datetime"):
         st.session_state.proposed_time = result["datetime"]
 
-    # Advance input and rerun
+    # prepare next input and rerun
     st.session_state.input_key = f"input_{len(st.session_state.messages)}"
     st.rerun()
 
 # Render chat bubbles
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
-    css_class = "user" if msg["role"] == "user" else "bot"
-    st.markdown(
-        f"<div class='chat-bubble {css_class}'>{msg['text']}</div>",
-        unsafe_allow_html=True
-    )
+    css = "user" if msg["role"] == "user" else "bot"
+    st.markdown(f"<div class='chat-bubble {css}'>{msg['text']}</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # Booking UI
@@ -154,4 +148,11 @@ if st.session_state.proposed_time:
         )
         if booking.status_code == 200:
             st.success("📅 Meeting booked successfully!")
-            st.session_state.messages.app_
+            st.session_state.messages.append({
+                "role": "bot",
+                "text": f"✅ Your meeting has been booked for {local.strftime('%B %d at %I:%M %p')}."
+            })
+            st.session_state.proposed_time = None
+            st.session_state.last_slots = []
+        else:
+            st.error("❌ Booking failed.")
