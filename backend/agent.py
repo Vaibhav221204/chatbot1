@@ -2,7 +2,7 @@ import os
 import requests
 import re
 from langgraph.graph import StateGraph
-from typing import TypedDict
+from typing import TypedDict, List
 from dotenv import load_dotenv
 import dateparser
 from datetime import datetime, timedelta
@@ -14,6 +14,7 @@ api_key = os.getenv("TOGETHER_API_KEY")
 
 class AgentState(TypedDict):
     message: str
+    history: List[str]
 
 def is_time_query(text: str) -> bool:
     patterns = [
@@ -45,8 +46,8 @@ def is_today_query(text: str) -> bool:
 
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
+    history = state.get("history", [])
 
-    # 1) built-in date/time helpers
     if is_time_query(message):
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
@@ -65,7 +66,6 @@ def respond(state: AgentState) -> AgentState:
             "message": f"Today's date is {today.strftime('%B %d, %Y')}."
         }
 
-    # 2) YOUR calendar-driven “available slots” handler
     lower = message.lower()
     if "available slot" in lower or "available time" in lower:
         parsed = dateparser.parse(
@@ -96,20 +96,33 @@ def respond(state: AgentState) -> AgentState:
                 f"{slot_list}. Which one would you like to book?"
             )
         }
-    # ───────────────────────────────────────────────────────────────────
 
-    # 3) Fallback to LLM prompt
+    convo = "
+".join([
+        f"User: {h}" if i % 2 == 0 else f"Assistant: {h}"
+        for i, h in enumerate(history)
+    ])
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
-       "You are a helpful and professional appointment scheduling assistant.\n"
-       "Respond only as the assistant, never as the user.\n"
-       "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.\n"
-       "If the user wants to book a meeting, ask for both date and time if missing.\n"
-       "Always confirm availability before booking by checking the calendar.\n"
-       "If time is already booked, ask the user to pick another slot.\n"
-       "do not ask the user which service or purpose you need this appointment for.\n"
-       "Only confirm booking if time is available.\n"
-       f"\nUser: {message}\nAssistant:"
+       "You are a helpful and professional appointment scheduling assistant.
+"
+       "Respond only as the assistant, never as the user.
+"
+       "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.
+"
+       "If the user wants to book a meeting, ask for both date and time if missing.
+"
+       "Always confirm availability before booking by checking the calendar.
+"
+       "If time is already booked, ask the user to pick another slot.
+"
+       "do not ask the user which service or purpose you need this appointment for.
+"
+       "Only confirm booking if time is available.
+"
+       + convo + f"
+User: {message}
+Assistant:"
     )
 
     try:
@@ -133,7 +146,6 @@ def respond(state: AgentState) -> AgentState:
             if choices and "text" in choices[0]:
                 reply_text = choices[0]["text"].strip()
 
-                # a) strip out any roleplay reenactments
                 roleplay_triggers = ["User:", "Assistant:", "User 1:", "User 2:", "User says", "Assistant says"]
                 for tr in roleplay_triggers:
                     if tr in reply_text:
@@ -141,7 +153,6 @@ def respond(state: AgentState) -> AgentState:
                         reply_text += " Could you please pick a time you'd like to book?"
                         break
 
-                # b) block any fake “I can book / I have scheduled” replies
                 if re.search(r"\b(i can book|i have (?:scheduled|booked))\b", reply_text.lower()):
                     reply_text = "That time seems available. Would you like me to book it?"
             else:
@@ -154,15 +165,14 @@ def respond(state: AgentState) -> AgentState:
 
     return {"message": reply_text}
 
-# ──────────────────────────────────────────────────────────────────────────────
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
 workflow.set_entry_point("chat")
 workflow.set_finish_point("chat")
 agent = workflow.compile()
 
-def run_agent(message: str) -> dict:
-    result = agent.invoke({"message": message})
+def run_agent(message: str, history: List[str]) -> dict:
+    result = agent.invoke({"message": message, "history": history})
     response_text = result.get("message", "")
     parsed_date = dateparser.parse(
         message,
