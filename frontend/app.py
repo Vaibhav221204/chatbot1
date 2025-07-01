@@ -64,7 +64,7 @@ user_input = st.text_input(
 if user_input:
     st.session_state.messages.append({"role": "user", "text": user_input})
 
-    # 1) “Yes” intercept: keep booking button alive
+    # 1) "Yes" intercept: keep booking button alive
     if user_input.strip().lower() in ("yes", "y", "sure", "please") \
        and st.session_state.proposed_time:
         st.session_state.messages.append({
@@ -76,7 +76,6 @@ if user_input:
 
     # 2) Direct time‐pick intercept: match against last_slots
     elif re.search(r"\b\d{1,2}(?::\d{2})?\b", user_input):
-        # strip spaces & normalize, e.g. "3:30pm" or "3:30"
         wanted = re.sub(r"\s+", "", user_input.lower())
         for slot_iso in st.session_state.last_slots:
             slot_dt = datetime.fromisoformat(slot_iso).astimezone(ZoneInfo("Asia/Kolkata"))
@@ -89,7 +88,7 @@ if user_input:
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # 3) Ordinal‐pick intercept (“first”, “second”, etc.)
+    # 3) Ordinal‐pick intercept
     elif (m := re.search(r"\b(first|second|third|fourth)\b", user_input.lower())) \
          and st.session_state.last_slots:
         idx = {"first": 0, "second": 1, "third": 2, "fourth": 3}[m.group(1)]
@@ -98,7 +97,7 @@ if user_input:
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # 4) Fallback to backend
+    # 4) Fallback
     else:
         history = [m["text"] for m in st.session_state.messages]
         resp = requests.post(
@@ -112,16 +111,13 @@ if user_input:
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-        # Append assistant reply
         bot_text = res.get("reply", "⚠️ No reply received.")
         st.session_state.messages.append({"role": "bot", "text": bot_text})
 
-        # Cache returned slots
         slots = res.get("slots", [])
         if isinstance(slots, list) and slots:
             st.session_state.last_slots = slots
 
-        # Capture any datetime for booking
         if res.get("datetime"):
             st.session_state.proposed_time = res["datetime"]
 
@@ -151,4 +147,9 @@ if st.session_state.proposed_time:
             st.success("📅 Meeting booked successfully!")
             st.session_state.messages.append({
                 "role": "bot",
-                "text": f"✅ Your meeting has been booked for {local.strftime('%B %d at %I:%M %p')}.
+                "text": f"✅ Your meeting has been booked for {local.strftime('%B %d at %I:%M %p')}"
+            })
+            st.session_state.proposed_time = None
+            st.session_state.last_slots = []
+        else:
+            st.error("❌ Booking failed.")
