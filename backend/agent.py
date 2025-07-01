@@ -15,62 +15,51 @@ api_key = os.getenv("TOGETHER_API_KEY")
 class AgentState(TypedDict):
     message: str
     history: List[str]
-    slots: List[str]  # we’ll inject this
 
 def is_time_query(text: str) -> bool:
-    patterns = [
-        r"\bwhat(?:'s| is)? the time\b",
-        r"\bcurrent time\b",
-        r"\btell me the time\b",
-        r"\btime now\b",
-        r"\bwhat time is it\b",
-        r"\bdo you know the time\b"
-    ]
-    return any(re.search(p, text.lower()) for p in patterns)
+    return bool(re.search(r"\bwhat(?:'s| is)? the time\b|\bcurrent time\b", text.lower()))
 
 def is_tomorrow_query(text: str) -> bool:
-    patterns = [
-        r"\bwhat(?:'s| is)? the date tomorrow\b",
-        r"\btomorrow(?:'s)? date\b",
-        r"\bdate of tomorrow\b"
-    ]
-    return any(re.search(p, text.lower()) for p in patterns)
+    return bool(re.search(r"\btomorrow(?:'s)? date\b", text.lower()))
 
 def is_today_query(text: str) -> bool:
-    patterns = [
-        r"\bwhat(?:'s| is|s)? the date today\b",
-        r"\btoday(?:'s)? date\b",
-        r"\bdate of today\b",
-        r"\bwhats the date today\b"
-    ]
-    return any(re.search(p, text.lower()) for p in patterns)
+    return bool(re.search(r"\btoday(?:'s)? date\b|\bdate of today\b", text.lower()))
 
 def respond(state: AgentState) -> AgentState:
-    message = state["message"]
-    history = state.get("history", [])
+    msg = state["message"]
+    hist = state.get("history", [])
 
-    # --- built-ins for time/date ---
-    if is_time_query(message):
+    # 1) Time/date queries
+    if is_time_query(msg):
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
-        return {"message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}.", "history": history}
-    if is_tomorrow_query(message):
-        tomorrow = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
-        return {"message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}.", "history": history}
-    if is_today_query(message):
-        today = datetime.now(ZoneInfo("Asia/Kolkata"))
-        return {"message": f"Today's date is {today.strftime('%B %d, %Y')}.", "history": history}
+        return {
+            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}.",
+            "history": hist
+        }
+    if is_tomorrow_query(msg):
+        d = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
+        return {
+            "message": f"The date tomorrow is {d.strftime('%B %d, %Y')}.",
+            "history": hist
+        }
+    if is_today_query(msg):
+        d = datetime.now(ZoneInfo("Asia/Kolkata"))
+        return {
+            "message": f"Today's date is {d.strftime('%B %d, %Y')}.",
+            "history": hist
+        }
 
-    # --- calendar-based available-slots handler ---
-    lower = message.lower()
+    # 2) Available‐slots handler
+    lower = msg.lower()
     if "available slot" in lower or "available time" in lower:
-        # determine the date the user means
+        # pick a date
         if "today" in lower:
-            target_date = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+            target = datetime.now(ZoneInfo("Asia/Kolkata")).date()
         elif "tomorrow" in lower:
-            target_date = (datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)).date()
+            target = (datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)).date()
         else:
             parsed = dateparser.parse(
-                message,
+                msg,
                 settings={
                     "TIMEZONE": "Asia/Kolkata",
                     "TO_TIMEZONE": "Asia/Kolkata",
@@ -78,54 +67,44 @@ def respond(state: AgentState) -> AgentState:
                 }
             )
             if not parsed:
-                return {"message": "Sure—what date are you interested in?", "history": history}
-            target_date = parsed.date()
+                return {"message": "Sure—what date are you interested in?", "history": hist}
+            target = parsed.date()
 
-        free = get_free_slots_for_day(target_date)
+        free = get_free_slots_for_day(target)
         if not free:
             return {
-                "message": f"Sorry, I don’t see any free slots on {target_date.strftime('%B %d, %Y')}.",
-                "history": history,
+                "message": f"Sorry, no free slots on {target.strftime('%B %d, %Y')}.",
+                "history": hist,
                 "slots": []
             }
 
-        iso_list = [slot[0] for slot in free]
+        iso_list = [s[0] for s in free]
         times = [
-            datetime.fromisoformat(slot[0])
+            datetime.fromisoformat(s[0])
             .astimezone(ZoneInfo("Asia/Kolkata"))
             .strftime("%-I:%M %p")
-            for slot in free
+            for s in free
         ]
-        times_str = ", ".join(times)
+        text = ", ".join(times)
         return {
-            "message": (
-                f"Here are your available slots on {target_date.strftime('%B %d, %Y')}: "
-                f"{times_str}. Which one would you like to book?"
-            ),
-            "history": history,
+            "message": f"Here are your available slots on {target.strftime('%B %d, %Y')}: {text}. Which one would you like to book?",
+            "history": hist,
             "slots": iso_list
         }
 
-    # --- your ORIGINAL prompt to the LLM ---
-    prompt = (
-        "You are a helpful and professional appointment scheduling assistant.\n"
-        "Respond only as the assistant, never as the user.\n"
-        "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.\n"
-        "If the user wants to book a meeting, ask for both date and time if missing.\n"
-        "Always confirm availability before booking by checking the calendar.\n"
-        "If time is already booked, ask the user to pick another slot.\n"
-        "do not ask the user which service or purpose you need this appointment for.\n"
-        "Only confirm booking if time is available.\n"
-        f"\nUser: {message}\nAssistant:"
+    # 3) Fallback to LLM
+    convo = "\n".join(
+        f"{'User' if i % 2 == 0 else 'Assistant'}: {h}"
+        for i, h in enumerate(hist)
     )
-
+    prompt = (
+        "You are a helpful appointment scheduling assistant.\n"
+        f"{convo}\nUser: {msg}\nAssistant:"
+    )
     try:
-        response = requests.post(
+        r = requests.post(
             "https://api.together.xyz/inference",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
+            headers={"Authorization": f"Bearer {api_key}"},
             json={
                 "model": "mistralai/Mistral-7B-Instruct-v0.1",
                 "prompt": prompt,
@@ -133,21 +112,21 @@ def respond(state: AgentState) -> AgentState:
                 "temperature": 0.7
             }
         )
-        data = response.json()
+        data = r.json()
         choices = data.get("output", {}).get("choices", [])
-        reply = choices[0].get("text", "").strip() if choices else "⚠️ No valid response."
+        reply = choices[0].get("text", "").strip() if choices else "⚠️ No reply."
     except Exception as e:
         reply = f"❌ Error: {e}"
 
     # strip any hallucinated roleplay
-    for trigger in ["User:", "Assistant:", "User says", "Assistant says"]:
-        if trigger in reply:
-            reply = reply.split(trigger)[0].strip()
+    for tr in ["User:", "Assistant:"]:
+        if tr in reply:
+            reply = reply.split(tr)[0].strip()
             break
 
-    return {"message": reply, "history": history}
+    return {"message": reply, "history": hist}
 
-# compile graph
+# compile LangGraph
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
 workflow.set_entry_point("chat")
@@ -158,30 +137,30 @@ def run_agent(message: str, history: List[str]) -> dict:
     out = agent.invoke({"message": message, "history": history})
     slots = out.get("slots", [])
     reply = out.get("message", "")
-
-    # detect explicit date/time for booking prompt
+    # detect explicit datetime
     parsed = dateparser.parse(
         message,
         settings={
-            'TIMEZONE': 'Asia/Kolkata',
-            'TO_TIMEZONE': 'Asia/Kolkata',
-            'RETURN_AS_TIMEZONE_AWARE': True
+            "TIMEZONE": "Asia/Kolkata",
+            "TO_TIMEZONE": "Asia/Kolkata",
+            "RETURN_AS_TIMEZONE_AWARE": True
         }
     )
-    datetime_str = parsed.isoformat() if parsed else None
+    dt = parsed.isoformat() if parsed else None
 
     if parsed:
-        start = datetime_str
+        start = dt
         end = (parsed + timedelta(hours=1)).isoformat()
-        for ev in get_available_slots():
-            ev_start = ev["start"].get("dateTime", ev["start"].get("date"))
-            ev_end = ev["end"].get("dateTime", ev["end"].get("date"))
-            if ev_start <= start < ev_end:
+        busy = get_available_slots()
+        for ev in busy:
+            s = ev["start"].get("dateTime", "")
+            e = ev["end"].get("dateTime", "")
+            if s <= start < e:
                 return {"reply": "That time is not available.", "datetime": None, "slots": slots}
         return {
             "reply": "That time seems available. Would you like me to book it?",
-            "datetime": datetime_str,
+            "datetime": dt,
             "slots": slots
         }
 
-    return {"reply": reply, "datetime": datetime_str, "slots": slots}
+    return {"reply": reply, "datetime": dt, "slots": slots}
