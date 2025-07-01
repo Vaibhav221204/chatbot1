@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
-API_BASE = "https://chatbot1-production-8826-up.railway.app"
+API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
 # ——— Your original styling/UI code ———
 st.markdown("""
