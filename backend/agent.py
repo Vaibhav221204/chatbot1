@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import dateparser
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from backend.calendar_utils import create_event, get_available_slots 
+from backend.calendar_utils import create_event, get_available_slots, get_free_slots_for_day
 
 load_dotenv()
 api_key = os.getenv("TOGETHER_API_KEY")
@@ -46,6 +46,7 @@ def is_today_query(text: str) -> bool:
 def respond(state: AgentState) -> AgentState:
     message = state["message"]
 
+    # 1) built-in date/time helpers
     if is_time_query(message):
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
         return {
@@ -64,6 +65,40 @@ def respond(state: AgentState) -> AgentState:
             "message": f"Today's date is {today.strftime('%B %d, %Y')}."
         }
 
+    # 2) YOUR calendar-driven “available slots” handler
+    lower = message.lower()
+    if "available slot" in lower or "available time" in lower:
+        parsed = dateparser.parse(
+            message,
+            settings={
+                "TIMEZONE": "Asia/Kolkata",
+                "TO_TIMEZONE": "Asia/Kolkata",
+                "RETURN_AS_TIMEZONE_AWARE": True
+            }
+        )
+        if not parsed:
+            return {"message": "Sure—what date are you interested in?"}
+
+        slots = get_free_slots_for_day(parsed.date())
+        if not slots:
+            return {
+                "message": f"Sorry, I don’t see any free slots on {parsed.strftime('%B %d, %Y')}."
+            }
+
+        times = [
+            datetime.fromisoformat(s[0]).strftime("%-I:%M %p")
+            for s in slots
+        ]
+        slot_list = ", ".join(times)
+        return {
+            "message": (
+                f"Here are your available slots on {parsed.strftime('%B %d, %Y')}: "
+                f"{slot_list}. Which one would you like to book?"
+            )
+        }
+    # ───────────────────────────────────────────────────────────────────
+
+    # 3) Fallback to LLM prompt
     model = "mistralai/Mistral-7B-Instruct-v0.1"
     prompt = (
        "You are a helpful and professional appointment scheduling assistant.\n"
@@ -98,16 +133,17 @@ def respond(state: AgentState) -> AgentState:
             if choices and "text" in choices[0]:
                 reply_text = choices[0]["text"].strip()
 
-                # 🔒 Remove hallucinated roleplay
+                # a) strip out any roleplay reenactments
                 roleplay_triggers = ["User:", "Assistant:", "User 1:", "User 2:", "User says", "Assistant says"]
-                if any(trigger in reply_text for trigger in roleplay_triggers):
-                    for trigger in roleplay_triggers:
-                        if trigger in reply_text:
-                            reply_text = reply_text.split(trigger)[0].strip()
-                            reply_text += " Could you please pick a time you'd like to book?"
-                            break
-                    if re.search(r"\b(i can book|i have (?:scheduled|booked))\b", reply_text.lower()):
-                          reply_text = "That time seems available. Would you like me to book it?"
+                for tr in roleplay_triggers:
+                    if tr in reply_text:
+                        reply_text = reply_text.split(tr)[0].strip()
+                        reply_text += " Could you please pick a time you'd like to book?"
+                        break
+
+                # b) block any fake “I can book / I have scheduled” replies
+                if re.search(r"\b(i can book|i have (?:scheduled|booked))\b", reply_text.lower()):
+                    reply_text = "That time seems available. Would you like me to book it?"
             else:
                 reply_text = "⚠️ No valid response text found."
         else:
@@ -118,6 +154,7 @@ def respond(state: AgentState) -> AgentState:
 
     return {"message": reply_text}
 
+# ──────────────────────────────────────────────────────────────────────────────
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
 workflow.set_entry_point("chat")
