@@ -55,7 +55,6 @@ if "last_slots" not in st.session_state:
 if "input_key" not in st.session_state:
     st.session_state.input_key = "input_1"
 
-# User input
 user_input = st.text_input(
     "You:", key=st.session_state.input_key,
     placeholder="e.g. Book a meeting on Friday at 2pm"
@@ -65,7 +64,9 @@ if user_input:
     # 1) record user message
     st.session_state.messages.append({"role": "user", "text": user_input})
 
-    # 2) intercept “yes” to keep booking button
+    # now choose exactly one branch:
+    # ──────────────────────────────────────────────────────────────────
+    # A) Auto-yes: keep the booking button alive
     if user_input.strip().lower() in ("yes", "y", "sure", "please") \
        and st.session_state.proposed_time:
         st.session_state.messages.append({
@@ -75,67 +76,70 @@ if user_input:
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # 3) intercept direct time picks
-    parsed = dateparser.parse(
+    # B) Direct time-pick: match ISO in last_slots
+    elif (parsed := dateparser.parse(
         user_input,
         settings={
             "TIMEZONE": "Asia/Kolkata",
             "TO_TIMEZONE": "Asia/Kolkata",
             "RETURN_AS_TIMEZONE_AWARE": True
         }
-    )
-    if parsed and parsed.isoformat() in st.session_state.last_slots:
+    )) and parsed.isoformat() in st.session_state.last_slots:
         st.session_state.proposed_time = parsed.isoformat()
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # 4) intercept ordinal picks
-    el = re.search(r"\b(first|second|third|fourth)\b", user_input.lower())
-    if el and st.session_state.last_slots:
-        idx = {"first":0, "second":1, "third":2, "fourth":3}[el.group(1)]
+    # C) Ordinal-pick: first/second/third/fourth
+    elif (m := re.search(r"\b(first|second|third|fourth)\b", user_input.lower())) \
+         and st.session_state.last_slots:
+        idx = {"first":0,"second":1,"third":2,"fourth":3}[m.group(1)]
         if idx < len(st.session_state.last_slots):
             st.session_state.proposed_time = st.session_state.last_slots[idx]
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # 5) fallback to normal chat call
-    history_texts = [m["text"] for m in st.session_state.messages]
-    resp = requests.post(
-        f"{API_BASE}/chat",
-        json={"message": user_input, "history": history_texts}
-    )
-    try:
-        result = resp.json()
-    except requests.JSONDecodeError:
-        st.error(f"Server returned invalid JSON:\n\n{resp.text}")
+    # D) Otherwise: normal /chat call with history
+    else:
+        history_texts = [m["text"] for m in st.session_state.messages]
+        resp = requests.post(
+            f"{API_BASE}/chat",
+            json={"message": user_input, "history": history_texts}
+        )
+        try:
+            result = resp.json()
+        except requests.JSONDecodeError:
+            st.error(f"Server returned invalid JSON:\n\n{resp.text}")
+            st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+            st.rerun()
+
+        # append assistant reply
+        reply = result.get("reply", "⚠️ No reply received.")
+        st.session_state.messages.append({"role": "bot", "text": reply})
+
+        # cache slots array if provided
+        slots = result.get("slots", [])
+        if isinstance(slots, list) and slots:
+            st.session_state.last_slots = slots
+
+        # capture any datetime for the booking button
+        if result.get("datetime"):
+            st.session_state.proposed_time = result["datetime"]
+
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
+    # ──────────────────────────────────────────────────────────────────
 
-    # append bot reply
-    reply = result.get("reply", "⚠️ No reply received.")
-    st.session_state.messages.append({"role": "bot", "text": reply})
-
-    # capture slots if returned
-    slots = result.get("slots", [])
-    if isinstance(slots, list) and slots:
-        st.session_state.last_slots = slots
-
-    # capture datetime for booking
-    if result.get("datetime"):
-        st.session_state.proposed_time = result["datetime"]
-
-    # prepare next input and rerun
-    st.session_state.input_key = f"input_{len(st.session_state.messages)}"
-    st.rerun()
-
-# Render chat bubbles
+# render chat bubbles
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
     css = "user" if msg["role"] == "user" else "bot"
-    st.markdown(f"<div class='chat-bubble {css}'>{msg['text']}</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='chat-bubble {css}'>{msg['text']}</div>",
+        unsafe_allow_html=True
+    )
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Booking UI
+# booking UI
 if st.session_state.proposed_time:
     start_iso = st.session_state.proposed_time
     end_iso = (datetime.fromisoformat(start_iso) + timedelta(hours=1)).isoformat()
