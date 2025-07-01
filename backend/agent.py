@@ -55,6 +55,11 @@ def respond(state: AgentState) -> AgentState:
         data = response.json()
         reply_text = data.get("output", {}).get("choices", [{}])[0].get("text", "").strip()
         reply_text = reply_text.replace("User:", "").replace("Assistant:", "").strip()
+
+        # Prevent fake booking replies
+        if "I have booked" in reply_text and ("[date]" in reply_text or "[time]" in reply_text):
+            reply_text = "✅ That time seems good. Would you like me to book it?"
+
         if not reply_text:
             reply_text = "I'm sorry, I didn’t understand that. Could you rephrase your request?"
     except Exception as e:
@@ -69,6 +74,7 @@ def respond(state: AgentState) -> AgentState:
         }
     )
     datetime_str = parsed_date.isoformat() if parsed_date else None
+    print("⏰ Parsed datetime:", datetime_str)
 
     if parsed_date:
         requested_start = parsed_date
