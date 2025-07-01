@@ -1,7 +1,8 @@
+# frontend/app.py
+
 import streamlit as st
 import requests
 import re
-import dateparser
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -64,7 +65,7 @@ user_input = st.text_input(
 if user_input:
     st.session_state.messages.append({"role": "user", "text": user_input})
 
-    # 1) "Yes" intercept: keep booking button alive
+    # 1) “Yes” intercept: keep booking button alive
     if user_input.strip().lower() in ("yes", "y", "sure", "please") \
        and st.session_state.proposed_time:
         st.session_state.messages.append({
@@ -74,30 +75,33 @@ if user_input:
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # 2) Direct time‐pick intercept: match against last_slots
-    elif re.search(r"\b\d{1,2}(?::\d{2})?\b", user_input):
-        wanted = re.sub(r"\s+", "", user_input.lower())
+    # 2) Direct time-pick intercept: match raw time against last_slots
+    elif (m := re.match(r"^\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)\s*$", user_input.strip(), re.IGNORECASE)):
+        raw = m.group(1)  # "3:30" or "3"
+        suffix = m.group(2).lower()  # "am" or "pm"
+        time_str1 = f"{raw.lower()}{suffix}"        # "3:30pm"
+        time_str2 = f"{raw.lower()}"               # "3:30"
         for slot_iso in st.session_state.last_slots:
             slot_dt = datetime.fromisoformat(slot_iso).astimezone(ZoneInfo("Asia/Kolkata"))
-            norm1 = slot_dt.strftime("%-I:%M%p").lower()  # "3:30pm"
-            norm2 = slot_dt.strftime("%-I:%M").lower()    # "3:30"
-            if wanted == norm1 or wanted == norm2:
+            s1 = slot_dt.strftime("%-I:%M%p").lower()
+            s2 = slot_dt.strftime("%-I:%M").lower()
+            if time_str1 == s1 or time_str2 == s2:
                 st.session_state.proposed_time = slot_iso
                 break
         if st.session_state.proposed_time:
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # 3) Ordinal‐pick intercept
-    elif (m := re.search(r"\b(first|second|third|fourth)\b", user_input.lower())) \
+    # 3) Ordinal-pick intercept (“first”, “second”, etc.)
+    elif (m2 := re.search(r"\b(first|second|third|fourth)\b", user_input.lower())) \
          and st.session_state.last_slots:
-        idx = {"first": 0, "second": 1, "third": 2, "fourth": 3}[m.group(1)]
+        idx = {"first": 0, "second": 1, "third": 2, "fourth": 3}[m2.group(1)]
         if idx < len(st.session_state.last_slots):
             st.session_state.proposed_time = st.session_state.last_slots[idx]
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # 4) Fallback
+    # 4) Fallback to backend
     else:
         history = [m["text"] for m in st.session_state.messages]
         resp = requests.post(
@@ -111,27 +115,29 @@ if user_input:
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-        bot_text = res.get("reply", "⚠️ No reply received.")
-        st.session_state.messages.append({"role": "bot", "text": bot_text})
+        # Append assistant reply
+        st.session_state.messages.append({"role": "bot", "text": res.get("reply", "⚠️ No reply received.")})
 
+        # Cache returned slots
         slots = res.get("slots", [])
         if isinstance(slots, list) and slots:
             st.session_state.last_slots = slots
 
+        # Capture any datetime for booking
         if res.get("datetime"):
             st.session_state.proposed_time = res["datetime"]
 
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-# Render chat
+# Render chat bubbles
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
     cls = "user" if msg["role"] == "user" else "bot"
     st.markdown(f"<div class='chat-bubble {cls}'>{msg['text']}</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Booking button
+# Show booking button when proposed_time is set
 if st.session_state.proposed_time:
     start_iso = st.session_state.proposed_time
     end_iso = (datetime.fromisoformat(start_iso) + timedelta(hours=1)).isoformat()
