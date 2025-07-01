@@ -106,7 +106,7 @@ def respond(state: AgentState) -> AgentState:
                             reply_text = reply_text.split(trigger)[0].strip()
                             reply_text += " Could you please pick a time you'd like to book?"
                             break
-                        if re.search(r"\b(i can book|i have (?:scheduled|booked))\b", reply_text.lower()):
+                    if re.search(r"\b(i can book|i have (?:scheduled|booked))\b", reply_text.lower()):
                           reply_text = "That time seems available. Would you like me to book it?"
             else:
                 reply_text = "⚠️ No valid response text found."
