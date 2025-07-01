@@ -109,8 +109,11 @@ def respond(state: AgentState) -> AgentState:
               reply_text = choices[0]["text"].strip()
 
     # 🔒 Clean up hallucinated roleplay
-              if "User:" in reply_text or "Assistant:" in reply_text or "User 1:" in reply_text or "User 2:" in reply_text:
-               reply_text = "Let's continue. Could you please pick a time from the available slots?"
+              if any(phrase in reply_text for phrase in ["User 1:", "User 2:", "Assistant:", "User:"]):
+               if "I've booked" in reply_text or "I have scheduled" in reply_text:
+                reply_text = "Please confirm if you'd like me to book it."
+              else:
+              reply_text = reply_text.split("User:")[0].strip()
                 
             else:
                 reply_text = "⚠️ No valid response text found."
