@@ -1,104 +1,169 @@
-import streamlit as st
+import os
 import requests
+import re
+from langgraph.graph import StateGraph
+from typing import TypedDict
+from dotenv import load_dotenv
+import dateparser
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from backend.calendar_utils import create_event, get_available_slots 
 
-st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
-API_BASE = "https://chatbot1-production-8826.up.railway.app"
+load_dotenv()
+api_key = os.getenv("TOGETHER_API_KEY")
 
+class AgentState(TypedDict):
+    message: str
 
-st.markdown("""
-<style>
-.chat-bubble {
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
-    margin: 0.5rem 0;
-    max-width: 80%;
-    word-wrap: break-word;
-    font-weight: 500;
-}
-.user {
-    background-color: #E0F7FA;
-    align-self: flex-end;
-    margin-left: auto;
-    color: black;
-}
-.bot {
-    background-color: #F3E5F5;
-    align-self: flex-start;
-    margin-right: auto;
-    color: black;
-}
-.chat-box {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 1rem;
-    background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.title("💬 AI Appointment Scheduler")
+def is_time_query(text: str) -> bool:
+    patterns = [
+        r"\bwhat(?:'s| is)? the time\b",
+        r"\bcurrent time\b",
+        r"\btell me the time\b",
+        r"\btime now\b",
+        r"\bwhat time is it\b",
+        r"\bdo you know the time\b"
+    ]
+    return any(re.search(p, text.lower()) for p in patterns)
 
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "proposed_time" not in st.session_state:
-    st.session_state.proposed_time = None
-if "input_key" not in st.session_state:
-    st.session_state.input_key = "input_1"
+def is_tomorrow_query(text: str) -> bool:
+    patterns = [
+        r"\bwhat(?:'s| is)? the date tomorrow\b",
+        r"\btomorrow(?:'s)? date\b",
+        r"\bdate of tomorrow\b"
+    ]
+    return any(re.search(p, text.lower()) for p in patterns)
 
 
-user_input = st.text_input("You:", key=st.session_state.input_key, placeholder="e.g. Book a meeting on Friday at 2pm")
 
-if user_input:
-    st.session_state.messages.append({"role": "user", "text": user_input})
-    try:
-        response = requests.post(f"{API_BASE}/chat", json={
-            "message": user_input,
-            "history": [m["text"] for m in st.session_state.messages if m["role"] in ["user", "bot"]]
-        })
-        result = response.json()
-        reply = result.get("reply", "⚠️ No reply received.")
+def is_today_query(text: str) -> bool:
+    patterns = [
+        r"\bwhat(?:'s| is|s)? the date today\b",
+        r"\btoday(?:'s)? date\b",
+        r"\bdate of today\b",
+        r"\bwhats the date today\b"
+    ]
+    return any(re.search(p, text.lower()) for p in patterns)
 
-        if "I have scheduled" not in reply and "meeting booked" not in reply.lower():
-            st.session_state.messages.append({"role": "bot", "text": reply})
 
-        if result.get("datetime"):
-            st.session_state.proposed_time = result["datetime"]
-
-    except Exception as e:
-        st.session_state.messages.append({"role": "bot", "text": f"⚠️ Error: {e}"})
+def respond(state: AgentState) -> AgentState:
+    message = state["message"]
 
     
-    st.session_state.input_key = f"input_{len(st.session_state.messages)}"
-    st.rerun()
+    if is_time_query(message):
+        now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        return {
+            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
+        }
 
+    if is_tomorrow_query(message):
+        tomorrow = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
+        return {
+            "message": f"The date tomorrow is {tomorrow.strftime('%B %d, %Y')}."
+        }
+    if is_today_query(message):
+        today = datetime.now(ZoneInfo("Asia/Kolkata"))
+        return {
+            "message": f"Today's date is {today.strftime('%B %d, %Y')}."
+        }
 
-st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
-for msg in st.session_state.messages:
-    css_class = "user" if msg["role"] == "user" else "bot"
-    st.markdown(f"<div class='chat-bubble {css_class}'>{msg['text']}</div>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+    
+        now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        return {
+            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}."
+        }
 
+    model = "mistralai/Mistral-7B-Instruct-v0.1"
+    prompt = (
+       "You are a helpful and professional appointment scheduling assistant.\n"
+    "Respond only as the assistant, never as the user.\n"
+    "If the user says something casual (like 'hi', 'how are you'), reply politely but do not ask for appointments yet.\n"
+    "If the user wants to book a meeting, ask for both date and time if missing.\n"
+    "Always confirm availability before booking by checking the calendar.\n"
+    "If time is already booked, ask the user to pick another slot.\n"
+    "do not ask the user which service or purpose you need this appointment for.\n"
+    "Only confirm booking if time is available.\n"
+    f"\nUser: {message}\nAssistant:"
+    )
 
-if st.session_state.proposed_time:
-    start = st.session_state.proposed_time
-    end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
-    from zoneinfo import ZoneInfo  # Top of file (Python 3.9+)
+    try:
+        response = requests.post(
+            "https://api.together.xyz/inference",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": model,
+                "prompt": prompt,
+                "max_tokens": 256,
+                "temperature": 0.7
+            }
+        )
 
-    local_time = datetime.fromisoformat(start).astimezone(ZoneInfo("Asia/Kolkata"))
-    st.markdown("🕒 **Proposed time:** " + local_time.strftime("%A, %B %d at %I:%M %p"))
-    if st.button("✅ Yes, book this meeting"):
-        booking = requests.post(f"{API_BASE}/book", json={"start": start, "end": end})
-        if booking.status_code == 200:
-            st.success("📅 Meeting booked successfully!")
-            st.session_state.messages.append({
-                "role": "bot",
-                "text": f"✅ Your meeting has been booked for {datetime.fromisoformat(start).strftime('%B %d at %I:%M %p')}."
-            })
-            st.session_state.proposed_time = None
+        data = response.json()
+        if "output" in data and isinstance(data["output"], dict):
+            choices = data["output"].get("choices", [])
+            if choices and "text" in choices[0]:
+                reply_text = choices[0]["text"].strip()
+            else:
+                reply_text = "⚠️ No valid response text found."
         else:
-            st.error("❌ Booking failed.")
+            reply_text = str(data.get("output", "⚠️ No output."))
+
+        return {"message": reply_text}
+
+    except Exception as e:
+        return {"message": f"❌ Error: {str(e)}"}
+
+workflow = StateGraph(AgentState)
+workflow.add_node("chat", respond)
+workflow.set_entry_point("chat")
+workflow.set_finish_point("chat")
+agent = workflow.compile()
+
+def run_agent(message: str) -> dict:
+    result = agent.invoke({"message": message})
+    response_text = result.get("message", "")
+    parsed_date = dateparser.parse(
+        message,
+        settings={
+            'TIMEZONE': 'Asia/Kolkata',
+            'TO_TIMEZONE': 'Asia/Kolkata',
+            'RETURN_AS_TIMEZONE_AWARE': True
+        }
+    )
+    datetime_str = parsed_date.isoformat() if parsed_date else None
+
+    if parsed_date:
+        requested_start = parsed_date.isoformat()
+        requested_end = (parsed_date + timedelta(hours=1)).isoformat()
+
+        try:
+            events = get_available_slots()
+            for event in events:
+                event_start = event['start'].get('dateTime', event['start'].get('date'))
+                event_end = event['end'].get('dateTime', event['end'].get('date'))
+
+                if event_start <= requested_start < event_end:
+                    return {
+                        "reply": "That time is not available.?",
+                        "datetime": None
+                    }
+
+            return {
+                "reply": "That time seems available.Would you like me to book it?",
+                "datetime": datetime_str
+            }
+
+        except Exception as e:
+            return {
+                "reply": f"⚠️ Failed to check calendar availability: {str(e)}",
+                "datetime": None
+            }
+
+    return {
+        "reply": response_text,
+        "datetime": datetime_str
+    }
