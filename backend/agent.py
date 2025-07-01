@@ -20,10 +20,8 @@ def respond(state: AgentState) -> AgentState:
     message = state["message"]
     history = state.get("history", [])
 
-    # Conversation string
     convo = "\n".join([f"User: {h}" if i % 2 == 0 else f"Assistant: {h}" for i, h in enumerate(history)])
-    
-    # Your original prompt with enhancements
+
     prompt = (
         "You are a helpful and professional appointment scheduling assistant.\n"
         "Respond only as the assistant, never as the user.\n"
@@ -56,6 +54,7 @@ def respond(state: AgentState) -> AgentState:
         )
         data = response.json()
         reply_text = data.get("output", {}).get("choices", [{}])[0].get("text", "").strip()
+        reply_text = reply_text.replace("User:", "").replace("Assistant:", "").strip()
         if not reply_text:
             reply_text = "I'm sorry, I didn’t understand that. Could you rephrase your request?"
     except Exception as e:
