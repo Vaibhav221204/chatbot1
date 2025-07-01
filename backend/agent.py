@@ -1,4 +1,6 @@
-import os, requests, re
+import os
+import requests
+import re
 from langgraph.graph import StateGraph
 from typing import TypedDict, List
 from dotenv import load_dotenv
@@ -30,35 +32,59 @@ def respond(state: AgentState) -> AgentState:
     # 1) Time/date queries
     if is_time_query(msg):
         now = datetime.now(ZoneInfo("Asia/Kolkata"))
-        return {"message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}.", "history": hist}
+        return {
+            "message": f"The current IST time is {now.strftime('%I:%M %p on %A, %B %d')}.",
+            "history": hist
+        }
     if is_tomorrow_query(msg):
         d = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)
-        return {"message": f"The date tomorrow is {d.strftime('%B %d, %Y')}.", "history": hist}
+        return {
+            "message": f"The date tomorrow is {d.strftime('%B %d, %Y')}.",
+            "history": hist
+        }
     if is_today_query(msg):
         d = datetime.now(ZoneInfo("Asia/Kolkata"))
-        return {"message": f"Today's date is {d.strftime('%B %d, %Y')}.", "history": hist}
+        return {
+            "message": f"Today's date is {d.strftime('%B %d, %Y')}.",
+            "history": hist
+        }
 
-    # 2) Available-slots handler
+    # 2) Available‐slots handler
     lower = msg.lower()
     if "available slot" in lower or "available time" in lower:
+        # pick a date
         if "today" in lower:
             target = datetime.now(ZoneInfo("Asia/Kolkata")).date()
         elif "tomorrow" in lower:
             target = (datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)).date()
         else:
-            parsed = dateparser.parse(msg, settings={
-                "TIMEZONE": "Asia/Kolkata", "TO_TIMEZONE": "Asia/Kolkata", "RETURN_AS_TIMEZONE_AWARE": True
-            })
+            parsed = dateparser.parse(
+                msg,
+                settings={
+                    "TIMEZONE": "Asia/Kolkata",
+                    "TO_TIMEZONE": "Asia/Kolkata",
+                    "RETURN_AS_TIMEZONE_AWARE": True
+                }
+            )
             if not parsed:
                 return {"message": "Sure—what date are you interested in?", "history": hist}
             target = parsed.date()
 
         free = get_free_slots_for_day(target)
         if not free:
-            return {"message": f"Sorry, no free slots on {target.strftime('%B %d, %Y')}.", "history": hist, "slots": []}
+            return {
+                "message": f"Sorry, no free slots on {target.strftime('%B %d, %Y')}.",
+                "history": hist,
+                "slots": []
+            }
 
         iso_list = [s[0] for s in free]
-        times = [datetime.fromisoformat(s[0]).astimezone(ZoneInfo("Asia/Kolkata")).strftime("%-I:%M %p") for s in free]
+        times = [
+            datetime.fromisoformat(s[0])
+            .astimezone(ZoneInfo("Asia/Kolkata"))
+            .strftime("%-I:%M %p")
+            for s in free
+        ]
         text = ", ".join(times)
         return {
             "message": f"Here are your available slots on {target.strftime('%B %d, %Y')}: {text}. Which one would you like to book?",
@@ -67,7 +93,10 @@ def respond(state: AgentState) -> AgentState:
         }
 
     # 3) Fallback to LLM
-    convo = "\n".join(f"User: {h}" if i%2==0 else f"Assistant: {h}" for i,h in enumerate(hist))
+    convo = "\n".join(
+        f"{'User' if i % 2 == 0 else 'Assistant'}: {h}"
+        for i, h in enumerate(hist)
+    )
     prompt = (
         "You are a helpful appointment scheduling assistant.\n"
         f"{convo}\nUser: {msg}\nAssistant:"
@@ -76,18 +105,28 @@ def respond(state: AgentState) -> AgentState:
         r = requests.post(
             "https://api.together.xyz/inference",
             headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": "mistralai/Mistral-7B-Instruct-v0.1", "prompt": prompt, "max_tokens": 256}
+            json={
+                "model": "mistralai/Mistral-7B-Instruct-v0.1",
+                "prompt": prompt,
+                "max_tokens": 256,
+                "temperature": 0.7
+            }
         )
         data = r.json()
         choices = data.get("output", {}).get("choices", [])
-        reply = choices[0].get("text","").strip() if choices else "⚠️ No reply."
+        reply = choices[0].get("text", "").strip() if choices else "⚠️ No reply."
     except Exception as e:
         reply = f"❌ Error: {e}"
+
+    # strip any hallucinated roleplay
     for tr in ["User:", "Assistant:"]:
         if tr in reply:
             reply = reply.split(tr)[0].strip()
+            break
+
     return {"message": reply, "history": hist}
 
+# compile LangGraph
 workflow = StateGraph(AgentState)
 workflow.add_node("chat", respond)
 workflow.set_entry_point("chat")
@@ -97,22 +136,31 @@ agent = workflow.compile()
 def run_agent(message: str, history: List[str]) -> dict:
     out = agent.invoke({"message": message, "history": history})
     slots = out.get("slots", [])
-    reply = out.get("message","")
-    # detect explicit datetime for booking proposal
-    parsed = dateparser.parse(message, settings={
-        "TIMEZONE": "Asia/Kolkata","TO_TIMEZONE": "Asia/Kolkata","RETURN_AS_TIMEZONE_AWARE": True
-    })
+    reply = out.get("message", "")
+    # detect explicit datetime
+    parsed = dateparser.parse(
+        message,
+        settings={
+            "TIMEZONE": "Asia/Kolkata",
+            "TO_TIMEZONE": "Asia/Kolkata",
+            "RETURN_AS_TIMEZONE_AWARE": True
+        }
+    )
     dt = parsed.isoformat() if parsed else None
 
     if parsed:
-        start = parsed.isoformat()
+        start = dt
         end = (parsed + timedelta(hours=1)).isoformat()
         busy = get_available_slots()
         for ev in busy:
-            s = ev["start"].get("dateTime","")
-            e = ev["end"].get("dateTime","")
+            s = ev["start"].get("dateTime", "")
+            e = ev["end"].get("dateTime", "")
             if s <= start < e:
-                return {"reply":"That time is not available.","datetime":None,"slots":slots}
-        return {"reply":"That time seems available. Would you like me to book it?","datetime":dt,"slots":slots}
+                return {"reply": "That time is not available.", "datetime": None, "slots": slots}
+        return {
+            "reply": "That time seems available. Would you like me to book it?",
+            "datetime": dt,
+            "slots": slots
+        }
 
-    return {"reply":reply,"datetime":dt,"slots":slots}
+    return {"reply": reply, "datetime": dt, "slots": slots}
