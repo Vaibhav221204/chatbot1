@@ -1,9 +1,12 @@
+# backend/calendar_utils.py
 
 import os
 import base64
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta, time
+from zoneinfo import ZoneInfo
+from dateutil.parser import isoparse
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_ID = 'vaibhav22gandhi@gmail.com'
@@ -26,7 +29,6 @@ def get_available_slots():
     service = get_calendar_service()
     now = datetime.utcnow().isoformat() + 'Z'
     future = (datetime.utcnow() + timedelta(days=1)).isoformat() + 'Z'
-
     events_result = service.events().list(
         calendarId=CALENDAR_ID,
         timeMin=now,
@@ -35,24 +37,21 @@ def get_available_slots():
         singleEvents=True,
         orderBy='startTime'
     ).execute()
-
     return events_result.get('items', [])
 
-def create_event(start_time, end_time, summary='Meeting'):
-    service = get_calendar_service()
-    event = {
-        'summary': summary,
-        'start': {'dateTime': start_time, 'timeZone': 'UTC'},
-        'end': {'dateTime': end_time, 'timeZone': 'UTC'},
-    }
-    return service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+# UPDATED get_free_slots_for_day with proper tz-aware comparisons
+LOCAL_TZ = ZoneInfo("Asia/Kolkata")
 
 def get_free_slots_for_day(target_date):
     service = get_calendar_service()
-    start_of_day = datetime.combine(target_date, time(9, 0))
-    end_of_day = datetime.combine(target_date, time(17, 0))
-    utc_start = start_of_day.isoformat() + 'Z'
-    utc_end = end_of_day.isoformat() + 'Z'
+
+    # Build the IST‐localized day bounds (9:00–17:00)
+    start_of_day = datetime.combine(target_date, time(9, 0), tzinfo=LOCAL_TZ)
+    end_of_day   = datetime.combine(target_date, time(17, 0), tzinfo=LOCAL_TZ)
+
+    # Ask Google for events in UTC
+    utc_start = start_of_day.astimezone(ZoneInfo("UTC")).isoformat()
+    utc_end   = end_of_day.astimezone(ZoneInfo("UTC")).isoformat()
 
     events = service.events().list(
         calendarId=CALENDAR_ID,
@@ -62,15 +61,33 @@ def get_free_slots_for_day(target_date):
         orderBy='startTime'
     ).execute().get('items', [])
 
-    # Build list of free slots (1-hour blocks from 9 AM to 5 PM)
-    all_slots = [(start_of_day + timedelta(hours=i), start_of_day + timedelta(hours=i+1)) for i in range(8)]
-    busy_times = [(datetime.fromisoformat(e['start']['dateTime'].replace('Z', '')),
-                   datetime.fromisoformat(e['end']['dateTime'].replace('Z', '')))
-                  for e in events]
+    # Parse busy intervals into IST tz‐aware datetimes
+    busy = []
+    for e in events:
+        raw_s = e['start'].get('dateTime')
+        raw_e = e['end'].get('dateTime')
+        if raw_s and raw_e:
+            s = isoparse(raw_s).astimezone(LOCAL_TZ)
+            t = isoparse(raw_e).astimezone(LOCAL_TZ)
+            busy.append((s, t))
 
-    free_slots = []
-    for slot_start, slot_end in all_slots:
-        if all(not (slot_start < b_end and slot_end > b_start) for b_start, b_end in busy_times):
-            free_slots.append((slot_start.isoformat(), slot_end.isoformat()))
+    # Build half‐hour slots from 9:00 to 17:00 in IST
+    slots = []
+    slot_start = start_of_day
+    while slot_start + timedelta(minutes=30) <= end_of_day:
+        slot_end = slot_start + timedelta(minutes=30)
+        # include slot only if it does not overlap any busy block
+        if all(not (slot_start < b_end and slot_end > b_start) for b_start, b_end in busy):
+            slots.append((slot_start.isoformat(), slot_end.isoformat()))
+        slot_start = slot_end
 
-    return free_slots
+    return slots
+
+def create_event(start_time, end_time, summary='Meeting'):
+    service = get_calendar_service()
+    event = {
+        'summary': summary,
+        'start': {'dateTime': start_time, 'timeZone': 'UTC'},
+        'end':   {'dateTime': end_time,   'timeZone': 'UTC'},
+    }
+    return service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
