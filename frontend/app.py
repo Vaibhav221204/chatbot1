@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import re
+import dateparser
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -55,28 +56,52 @@ if "last_slots" not in st.session_state:
 if "input_key" not in st.session_state:
     st.session_state.input_key = "input_1"
 
-# User input box
+# User input
 user_input = st.text_input(
     "You:", key=st.session_state.input_key,
     placeholder="e.g. Book a meeting on Friday at 2pm"
 )
 
 if user_input:
-    # Add user message to chat history
+    # Store user message
     st.session_state.messages.append({"role": "user", "text": user_input})
 
-    # 1) Support ordinal picks of the last slots
-    ordinal = re.search(r"\b(first|second|third|fourth)\b", user_input.lower())
-    if ordinal and st.session_state.last_slots:
-        idx = {"first": 0, "second": 1, "third": 2, "fourth": 3}[ordinal.group(1)]
-        if idx < len(st.session_state.last_slots):
-            # pick that slot
-            st.session_state.proposed_time = st.session_state.last_slots[idx]
-            # advance input and rerun to show booking button
+    # 1) Auto-yes intercept: preserve booking button
+    if user_input.strip().lower() in ("yes", "y", "sure", "please") \
+       and st.session_state.proposed_time:
+        st.session_state.messages.append({
+            "role": "bot",
+            "text": "Great! Please click the button below to confirm the booking."
+        })
+        st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+        st.rerun()
+
+    # 2) Direct time pick from last_slots
+    parsed = dateparser.parse(
+        user_input,
+        settings={
+            "TIMEZONE": "Asia/Kolkata",
+            "TO_TIMEZONE": "Asia/Kolkata",
+            "RETURN_AS_TIMEZONE_AWARE": True
+        }
+    )
+    if parsed:
+        iso = parsed.isoformat()
+        if iso in st.session_state.last_slots:
+            st.session_state.proposed_time = iso
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # 2) Normal chat request with history
+    # 3) Ordinal pick (first/second/third)
+    m = re.search(r"\b(first|second|third|fourth)\b", user_input.lower())
+    if m and st.session_state.last_slots:
+        idx = {"first":0, "second":1, "third":2, "fourth":3}[m.group(1)]
+        if idx < len(st.session_state.last_slots):
+            st.session_state.proposed_time = st.session_state.last_slots[idx]
+            st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+            st.rerun()
+
+    # 4) Normal /chat call with history
     history_texts = [m["text"] for m in st.session_state.messages]
     resp = requests.post(
         f"{API_BASE}/chat",
@@ -93,30 +118,30 @@ if user_input:
     reply = result.get("reply", "⚠️ No reply received.")
     st.session_state.messages.append({"role": "bot", "text": reply})
 
-    # If backend returned a raw slots list, cache it
+    # Cache raw slots list if present
     slots = result.get("slots", [])
     if isinstance(slots, list) and slots:
         st.session_state.last_slots = slots
 
-    # If backend returned a datetime, set it for booking
+    # Capture datetime for booking button
     if result.get("datetime"):
         st.session_state.proposed_time = result["datetime"]
 
-    # Advance input key and rerun to render updates
+    # Advance input and rerun
     st.session_state.input_key = f"input_{len(st.session_state.messages)}"
     st.rerun()
 
-# Render all chat bubbles
+# Render chat bubbles
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
-    css = "user" if msg["role"] == "user" else "bot"
+    css_class = "user" if msg["role"] == "user" else "bot"
     st.markdown(
-        f"<div class='chat-bubble {css}'>{msg['text']}</div>",
+        f"<div class='chat-bubble {css_class}'>{msg['text']}</div>",
         unsafe_allow_html=True
     )
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Show booking button if a proposed_time is set
+# Booking UI
 if st.session_state.proposed_time:
     start_iso = st.session_state.proposed_time
     end_iso = (datetime.fromisoformat(start_iso) + timedelta(hours=1)).isoformat()
@@ -129,12 +154,4 @@ if st.session_state.proposed_time:
         )
         if booking.status_code == 200:
             st.success("📅 Meeting booked successfully!")
-            st.session_state.messages.append({
-                "role": "bot",
-                "text": f"✅ Your meeting has been booked for {local.strftime('%B %d at %I:%M %p')}."
-            })
-            # clear state for next booking cycle
-            st.session_state.proposed_time = None
-            st.session_state.last_slots = []
-        else:
-            st.error("❌ Booking failed.")
+            st.session_state.messages.app_
