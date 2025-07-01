@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
 API_BASE = "https://chatbot1-production-8826.up.railway.app"
 
-# ——— Your UI/CSS ———
+# ——— Your original CSS/UI code ———
 st.markdown("""
 <style>
 .chat-bubble {
@@ -42,10 +42,11 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-st.title("💬 AI Appointment Scheduler")
-# —————————————————
 
-# Session state defaults
+st.title("💬 AI Appointment Scheduler")
+# —————————————————————————————
+
+# Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_slots" not in st.session_state:
@@ -55,18 +56,19 @@ if "proposed_time" not in st.session_state:
 if "input_key" not in st.session_state:
     st.session_state.input_key = "input_1"
 
-# User input
+# User input box
 user_input = st.text_input(
     "You:", key=st.session_state.input_key,
     placeholder="e.g. Book a meeting on Friday at 2pm"
 )
 
 if user_input:
-    # Record the user’s message
+    # 1) Record the user’s message
     st.session_state.messages.append({"role": "user", "text": user_input})
 
-    # ─── 1) “Yes” intercept: keep the button alive ───
-    if user_input.strip().lower() in ("yes", "y", "sure", "please") and st.session_state.proposed_time:
+    # 2) “Yes” intercept to keep button alive
+    if user_input.strip().lower() in ("yes", "y", "sure", "please") \
+       and st.session_state.proposed_time:
         st.session_state.messages.append({
             "role": "bot",
             "text": "Perfect—please click the button below to confirm the booking."
@@ -74,7 +76,7 @@ if user_input:
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # ─── 2) Direct time‐pick intercept (exact ISO match) ───
+    # 3) Direct time‐pick intercept (exact ISO match)
     elif (parsed := dateparser.parse(
         user_input,
         settings={
@@ -87,7 +89,7 @@ if user_input:
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # ─── 3) Ordinal intercept (“first”, “second”, ...) ───
+    # 4) Ordinal‐pick intercept (“first”, “second”, etc.)
     elif (m := re.search(r"\b(first|second|third|fourth)\b", user_input.lower())) \
          and st.session_state.last_slots:
         idx = {"first": 0, "second": 1, "third": 2, "fourth": 3}[m.group(1)]
@@ -96,7 +98,7 @@ if user_input:
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # ─── 4) Otherwise → normal /chat call with history ───
+    # 5) Fallback to your /chat endpoint with history
     else:
         history = [m["text"] for m in st.session_state.messages]
         resp = requests.post(
@@ -110,11 +112,11 @@ if user_input:
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-        # Append assistant’s reply
+        # Append the assistant’s reply
         reply = result.get("reply", "⚠️ No reply received.")
         st.session_state.messages.append({"role": "bot", "text": reply})
 
-        # Cache any returned raw slots list
+        # Cache any returned raw slots array
         slots = result.get("slots", [])
         if isinstance(slots, list) and slots:
             st.session_state.last_slots = slots
@@ -129,27 +131,31 @@ if user_input:
 # — Render chat bubbles —
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
-    cls = "user" if msg["role"] == "user" else "bot"
-    st.markdown(f"<div class='chat-bubble {cls}'>{msg['text']}</div>", unsafe_allow_html=True)
+    css = "user" if msg["role"] == "user" else "bot"
+    st.markdown(
+        f"<div class='chat-bubble {css}'>{msg['text']}</div>",
+        unsafe_allow_html=True
+    )
 st.markdown("</div>", unsafe_allow_html=True)
 
-# — Booking button —
+# — Booking button UI —
 if st.session_state.proposed_time:
-    start = st.session_state.proposed_time
-    end = (datetime.fromisoformat(start) + timedelta(hours=1)).isoformat()
-    local = datetime.fromisoformat(start).astimezone(ZoneInfo("Asia/Kolkata"))
+    start_iso = st.session_state.proposed_time
+    end_iso = (datetime.fromisoformat(start_iso) + timedelta(hours=1)).isoformat()
+    local = datetime.fromisoformat(start_iso).astimezone(ZoneInfo("Asia/Kolkata"))
     st.markdown("🕒 **Proposed time:** " + local.strftime("%A, %B %d at %I:%M %p"))
     if st.button("✅ Yes, book this meeting"):
-        book = requests.post(
+        booking = requests.post(
             f"{API_BASE}/book",
-            json={"start": start, "end": end}
+            json={"start": start_iso, "end": end_iso}
         )
-        if book.status_code == 200:
+        if booking.status_code == 200:
             st.success("📅 Meeting booked successfully!")
             st.session_state.messages.append({
                 "role": "bot",
                 "text": f"✅ Your meeting has been booked for {local.strftime('%B %d at %I:%M %p')}."
             })
+            # Clear for the next booking cycle
             st.session_state.proposed_time = None
             st.session_state.last_slots = []
         else:
