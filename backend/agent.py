@@ -106,7 +106,12 @@ def respond(state: AgentState) -> AgentState:
         if "output" in data and isinstance(data["output"], dict):
             choices = data["output"].get("choices", [])
             if choices and "text" in choices[0]:
-                reply_text = choices[0]["text"].strip()
+              reply_text = choices[0]["text"].strip()
+
+    # 🔒 Clean up hallucinated roleplay
+              if "User:" in reply_text or "Assistant:" in reply_text or "User 1:" in reply_text or "User 2:" in reply_text:
+               reply_text = "Let's continue. Could you please pick a time from the available slots?"
+                
             else:
                 reply_text = "⚠️ No valid response text found."
         else:
