@@ -3,11 +3,12 @@
 import streamlit as st
 import requests
 import re
+import dateparser
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
-API_BASE = "https://chatbot1-production-8826.up.railway.app"
+API_BASE = "https://chatbot1-production-8826-up.railway.app"
 
 # ——— Your CSS/UI styling ———
 st.markdown("""
@@ -75,17 +76,21 @@ if user_input:
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # 2) Direct time-pick intercept: match raw time against last_slots
-    elif (m := re.match(r"^\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)\s*$", user_input.strip(), re.IGNORECASE)):
-        raw = m.group(1)  # "3:30" or "3"
-        suffix = m.group(2).lower()  # "am" or "pm"
-        time_str1 = f"{raw.lower()}{suffix}"        # "3:30pm"
-        time_str2 = f"{raw.lower()}"               # "3:30"
+    # 2) Direct time-pick intercept: match raw time against last_slots (suffix optional)
+    elif (m := re.match(r"^\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*$", user_input.strip(), re.IGNORECASE)) \
+         and st.session_state.last_slots:
+        raw = m.group(1).lower()           # e.g. "3:30"
+        suffix = (m.group(2) or "").lower()  # "am","pm" or empty
         for slot_iso in st.session_state.last_slots:
             slot_dt = datetime.fromisoformat(slot_iso).astimezone(ZoneInfo("Asia/Kolkata"))
-            s1 = slot_dt.strftime("%-I:%M%p").lower()
-            s2 = slot_dt.strftime("%-I:%M").lower()
-            if time_str1 == s1 or time_str2 == s2:
+            # try multiple formats
+            fmts = [
+                slot_dt.strftime("%-I:%M%p").lower(),
+                slot_dt.strftime("%-I:%M %p").lower(),
+                slot_dt.strftime("%-I:%M").lower(),
+                slot_dt.strftime("%-I").lower(),
+            ]
+            if (suffix and f"{raw}{suffix}" in fmts) or raw in fmts:
                 st.session_state.proposed_time = slot_iso
                 break
         if st.session_state.proposed_time:
