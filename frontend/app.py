@@ -104,25 +104,34 @@ if user_input:
     # 4) Fallback to backend
     else:
         history = [m["text"] for m in st.session_state.messages]
-        resp = requests.post(
-            f"{API_BASE}/chat",
-            json={"message": user_input, "history": history}
-        )
-        try:
-            res = resp.json()
-        except Exception:
-            st.error(f"Server error:\n\n{resp.text}")
-            st.session_state.input_key = f"input_{len(st.session_state.messages)}"
-            st.rerun()
+       resp = requests.post(
+    f"{API_BASE}/chat",
+    json={"message": user_input, "history": history}
+)
 
-        # Append assistant reply
-        # Extract bot reply safely (supports multiple backend formats)
+try:
+    res = resp.json()   # ✅ THIS LINE IS REQUIRED
+except Exception:
+    st.error(f"Server error:\n\n{resp.text}")
+    st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+    st.rerun()
+
+# Extract bot reply safely (supports multiple backend formats)
 bot_text = (
     res.get("reply")
     or res.get("response")
     or res.get("message")
     or res.get("output")
 )
+
+if not bot_text:
+    bot_text = "⚠️ No valid response."
+
+st.session_state.messages.append({
+    "role": "bot",
+    "text": bot_text
+})
+
 
 if not bot_text:
     bot_text = "⚠️ No valid response."
