@@ -6,10 +6,11 @@ import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+# ---------------- CONFIG ----------------
 st.set_page_config(page_title="📅 AI Appointment Scheduler", layout="centered")
 API_BASE = "https://chatbot1-iboi.onrender.com"
 
-# ——— Your CSS/UI styling ———
+# ---------------- STYLES ----------------
 st.markdown("""
 <style>
 .chat-bubble {
@@ -46,28 +47,32 @@ st.markdown("""
 
 st.title("💬 AI Appointment Scheduler")
 
-# Session state
+# ---------------- SESSION STATE ----------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
 if "last_slots" not in st.session_state:
     st.session_state.last_slots = []
+
 if "proposed_time" not in st.session_state:
     st.session_state.proposed_time = None
+
 if "input_key" not in st.session_state:
     st.session_state.input_key = "input_1"
 
-# User input
+# ---------------- USER INPUT ----------------
 user_input = st.text_input(
-    "You:", key=st.session_state.input_key,
+    "You:",
+    key=st.session_state.input_key,
     placeholder="e.g. Book a meeting on Friday at 2pm"
 )
 
+# ---------------- HANDLE INPUT ----------------
 if user_input:
     st.session_state.messages.append({"role": "user", "text": user_input})
 
-    # 1) “Yes” intercept: keep booking button alive
-    if user_input.strip().lower() in ("yes", "y", "sure", "please") \
-       and st.session_state.proposed_time:
+    # 1️⃣ YES CONFIRMATION
+    if user_input.strip().lower() in ("yes", "y", "sure", "please") and st.session_state.proposed_time:
         st.session_state.messages.append({
             "role": "bot",
             "text": "Perfect—please click the button below to confirm the booking."
@@ -75,101 +80,96 @@ if user_input:
         st.session_state.input_key = f"input_{len(st.session_state.messages)}"
         st.rerun()
 
-    # 2) Direct time-pick intercept: match raw time against last_slots
+    # 2️⃣ DIRECT TIME PICK
     elif (m := re.match(r"^\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)\s*$", user_input.strip(), re.IGNORECASE)):
-        raw = m.group(1)  # "3:30" or "3"
-        suffix = m.group(2).lower()  # "am" or "pm"
-        time_str1 = f"{raw.lower()}{suffix}"        # "3:30pm"
-        time_str2 = f"{raw.lower()}"               # "3:30"
+        raw, suffix = m.group(1), m.group(2).lower()
         for slot_iso in st.session_state.last_slots:
             slot_dt = datetime.fromisoformat(slot_iso).astimezone(ZoneInfo("Asia/Kolkata"))
-            s1 = slot_dt.strftime("%-I:%M%p").lower()
-            s2 = slot_dt.strftime("%-I:%M").lower()
-            if time_str1 == s1 or time_str2 == s2:
+            if raw.lower() in (
+                slot_dt.strftime("%-I:%M%p").lower(),
+                slot_dt.strftime("%-I:%M").lower()
+            ):
                 st.session_state.proposed_time = slot_iso
                 break
-        if st.session_state.proposed_time:
-            st.session_state.input_key = f"input_{len(st.session_state.messages)}"
-            st.rerun()
+        st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+        st.rerun()
 
-    # 3) Ordinal-pick intercept (“first”, “second”, etc.)
-    elif (m2 := re.search(r"\b(first|second|third|fourth)\b", user_input.lower())) \
-         and st.session_state.last_slots:
+    # 3️⃣ ORDINAL PICK
+    elif (m2 := re.search(r"\b(first|second|third|fourth)\b", user_input.lower())) and st.session_state.last_slots:
         idx = {"first": 0, "second": 1, "third": 2, "fourth": 3}[m2.group(1)]
         if idx < len(st.session_state.last_slots):
             st.session_state.proposed_time = st.session_state.last_slots[idx]
+        st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+        st.rerun()
+
+    # 4️⃣ BACKEND CALL
+    else:
+        history = [m["text"] for m in st.session_state.messages]
+
+        resp = requests.post(
+            f"{API_BASE}/chat",
+            json={"message": user_input, "history": history}
+        )
+
+        try:
+            res = resp.json()
+        except Exception:
+            st.error(f"Server error:\n\n{resp.text}")
             st.session_state.input_key = f"input_{len(st.session_state.messages)}"
             st.rerun()
 
-    # 4) Fallback to backend
-    else:
-        history = [m["text"] for m in st.session_state.messages]
-        resp = requests.post(
-    f"{API_BASE}/chat",
-    json={"message": user_input, "history": history}
-)
+        # ✅ SAFE RESPONSE EXTRACTION
+        bot_text = (
+            res.get("reply")
+            or res.get("response")
+            or res.get("message")
+            or res.get("output")
+        )
 
-try:
-    res = resp.json()   # ✅ THIS LINE IS REQUIRED
-except Exception:
-    st.error(f"Server error:\n\n{resp.text}")
-    st.session_state.input_key = f"input_{len(st.session_state.messages)}"
-    st.rerun()
+        if not bot_text:
+            bot_text = "⚠️ No valid response."
 
-# Extract bot reply safely (supports multiple backend formats)
-bot_text = (
-    res.get("reply")
-    or res.get("response")
-    or res.get("message")
-    or res.get("output")
-)
+        st.session_state.messages.append({
+            "role": "bot",
+            "text": bot_text
+        })
 
-if not bot_text:
-    bot_text = "⚠️ No valid response."
+        # Cache available slots
+        slots = res.get("slots", [])
+        if isinstance(slots, list) and slots:
+            st.session_state.last_slots = slots
 
-st.session_state.messages.append({
-    "role": "bot",
-    "text": bot_text
-})
+        # Capture proposed datetime
+        if res.get("datetime"):
+            st.session_state.proposed_time = res["datetime"]
 
+        st.session_state.input_key = f"input_{len(st.session_state.messages)}"
+        st.rerun()
 
-if not bot_text:
-    bot_text = "⚠️ No valid response."
-
-st.session_state.messages.append({
-    "role": "bot",
-    "text": bot_text
-})
-
-
-if not bot_text:
-    bot_text = "⚠️ No valid response."
-
-st.session_state.messages.append({
-    "role": "bot",
-    "text": bot_text
-})
-
-
-# Render chat bubbles
+# ---------------- CHAT UI ----------------
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages:
     cls = "user" if msg["role"] == "user" else "bot"
-    st.markdown(f"<div class='chat-bubble {cls}'>{msg['text']}</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='chat-bubble {cls}'>{msg['text']}</div>",
+        unsafe_allow_html=True
+    )
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Show booking button when proposed_time is set
+# ---------------- BOOKING CONFIRMATION ----------------
 if st.session_state.proposed_time:
     start_iso = st.session_state.proposed_time
     end_iso = (datetime.fromisoformat(start_iso) + timedelta(hours=1)).isoformat()
     local = datetime.fromisoformat(start_iso).astimezone(ZoneInfo("Asia/Kolkata"))
 
     st.markdown("🕒 **Proposed time:** " + local.strftime("%A, %B %d at %I:%M %p"))
+
     if st.button("✅ Yes, book this meeting"):
         booking = requests.post(
             f"{API_BASE}/book",
             json={"start": start_iso, "end": end_iso}
         )
+
         if booking.status_code == 200:
             st.success("📅 Meeting booked successfully!")
             st.session_state.messages.append({
@@ -180,3 +180,4 @@ if st.session_state.proposed_time:
             st.session_state.last_slots = []
         else:
             st.error("❌ Booking failed.")
+
