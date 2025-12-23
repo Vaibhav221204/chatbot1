@@ -132,17 +132,21 @@ st.session_state.messages.append({
     "text": bot_text
 })
 
-        # Cache returned slots
-        slots = res.get("slots", [])
-        if isinstance(slots, list) and slots:
-            st.session_state.last_slots = slots
+# Extract bot reply safely (supports multiple backend formats)
+bot_text = (
+    res.get("reply")
+    or res.get("response")
+    or res.get("message")
+    or res.get("output")
+)
 
-        # Capture any datetime for booking
-        if res.get("datetime"):
-            st.session_state.proposed_time = res["datetime"]
+if not bot_text:
+    bot_text = "⚠️ No valid response."
 
-        st.session_state.input_key = f"input_{len(st.session_state.messages)}"
-        st.rerun()
+st.session_state.messages.append({
+    "role": "bot",
+    "text": bot_text
+})
 
 # Render chat bubbles
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
