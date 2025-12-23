@@ -104,7 +104,7 @@ if user_input:
     # 4) Fallback to backend
     else:
         history = [m["text"] for m in st.session_state.messages]
-       resp = requests.post(
+        resp = requests.post(
     f"{API_BASE}/chat",
     json={"message": user_input, "history": history}
 )
@@ -123,6 +123,15 @@ bot_text = (
     or res.get("message")
     or res.get("output")
 )
+
+if not bot_text:
+    bot_text = "⚠️ No valid response."
+
+st.session_state.messages.append({
+    "role": "bot",
+    "text": bot_text
+})
+
 
 if not bot_text:
     bot_text = "⚠️ No valid response."
