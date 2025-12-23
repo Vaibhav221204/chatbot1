@@ -116,7 +116,21 @@ if user_input:
             st.rerun()
 
         # Append assistant reply
-        st.session_state.messages.append({"role": "bot", "text": res.get("reply", "⚠️ No reply received.")})
+        # Extract bot reply safely (supports multiple backend formats)
+bot_text = (
+    res.get("reply")
+    or res.get("response")
+    or res.get("message")
+    or res.get("output")
+)
+
+if not bot_text:
+    bot_text = "⚠️ No valid response."
+
+st.session_state.messages.append({
+    "role": "bot",
+    "text": bot_text
+})
 
         # Cache returned slots
         slots = res.get("slots", [])
